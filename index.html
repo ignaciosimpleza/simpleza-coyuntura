@@ -673,7 +673,7 @@
     <!-- RESUMEN KPIs -->
     <div class="kpi-grid" style="margin-bottom: 64px;">
       <div class="kpi-card accent">
-        <div class="kpi-label">IPC mensual · mar-26</div>
+        <div class="kpi-label">IPC mensual · <span id="kpi-ipc-mensual-fecha">mar-26</span></div>
         <div class="kpi-value" id="kpi-ipc-mensual">3,4%</div>
         <div class="kpi-sub" id="kpi-ipc-mensual-sub">Variación intermensual</div>
       </div>
@@ -1294,6 +1294,35 @@
     return json;
   }
 
+  // El badge "EN VIVO" SOLO aparece si el último dato disponible es razonablemente
+  // reciente (default: ≤ 4 meses de antigüedad — cubre lags de publicación normales
+  // de INDEC). Si el dato es más viejo, lo tratamos como error y mostramos el motivo
+  // en lugar de un EN VIVO engañoso.
+  const FRESH_MAX_MONTHS = 4;
+  function monthsSince(dateStr) {
+    if (!dateStr) return Infinity;
+    const parts = String(dateStr).split('-');
+    if (parts.length < 2) return Infinity;
+    const y = Number(parts[0]);
+    const monthIdx = Number(parts[1]) - 1;
+    if (isNaN(y) || isNaN(monthIdx)) return Infinity;
+    const now = new Date();
+    return (now.getFullYear() - y) * 12 + (now.getMonth() - monthIdx);
+  }
+  function isFreshEnough(dateStr, maxMonths = FRESH_MAX_MONTHS) {
+    return monthsSince(dateStr) <= maxMonths;
+  }
+  // Si los datos no son frescos, lanza un error con marca .stale y la fecha,
+  // para que el catch del caller pueda mostrar un mensaje específico.
+  function assertFresh(dateStr, label = 'Datos') {
+    if (!isFreshEnough(dateStr)) {
+      const e = new Error(`${label} no actualizados (último: ${formatMonth(dateStr) || dateStr || 'desconocido'})`);
+      e.stale = true;
+      e.staleDate = dateStr;
+      throw e;
+    }
+  }
+
   function setBadgeLive(el, lastDate) {
     if (!el) return;
     el.className = 'badge badge-live';
@@ -1301,19 +1330,33 @@
     const sec = el.closest('.section');
     if (sec) { sec.classList.add('is-live'); sec.classList.remove('is-error'); }
   }
-  function setBadgeError(el) {
+  function setBadgeError(el, msg) {
     if (!el) return;
     el.className = 'badge badge-error';
-    el.textContent = 'Sin conexión · datos en caché';
+    el.textContent = msg || 'Sin conexión · datos en caché';
     const sec = el.closest('.section');
     if (sec) { sec.classList.remove('is-live'); sec.classList.add('is-error'); }
   }
+  function setBadgeFromError(el, e) {
+    if (e && e.stale) {
+      setBadgeError(el, `API desactualizada · último ${formatMonth(e.staleDate)}`);
+    } else {
+      setBadgeError(el);
+    }
+  }
   function formatMonth(dateStr) {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
+    // Parsear YYYY-MM[-DD] sin shift de timezone (en ART, new Date("2024-03-01") cae a
+    // 2024-02-29 21:00 y muestra "feb" en vez de "mar"). Construimos local.
+    const s = String(dateStr);
+    const parts = s.split('-');
+    if (parts.length < 2) return '';
+    const y = Number(parts[0]);
+    const monthIdx = Number(parts[1]) - 1;
+    if (isNaN(y) || isNaN(monthIdx)) return '';
+    const d = new Date(y, monthIdx, 1);
     const m = d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', '');
-    const y = String(d.getFullYear()).slice(2);
-    return `${m}-${y}`;
+    return `${m}-${String(y).slice(2)}`;
   }
   function fmtPct(v, decimals = 1) {
     if (v == null || isNaN(v)) return '—';
@@ -1733,12 +1776,16 @@
         valor: ((+v / +series[i][1]) - 1) * 100
       }));
       const last36 = monthly.slice(-36);
+
+      // Validar frescura ANTES de pintar nada — si la API devolvió data vieja
+      // dejamos el FALLBACK ya renderizado y caemos al catch con badge de error.
+      const lastRow = last36[last36.length - 1];
+      assertFresh(lastRow.date, 'IPC');
+
       const labels = last36.map(r => formatMonth(r.date));
       const values = last36.map(r => r.valor);
       renderIpc(labels, values, true);
 
-      // KPIs
-      const lastRow = last36[last36.length - 1];
       const fechaTxt = formatMonth(lastRow.date);
       const mensualTxt = fmtPct(lastRow.valor);
       const mensualSubTxt = `Var. intermensual · ${fechaTxt}`;
@@ -1746,6 +1793,7 @@
       document.getElementById('ipc-mensual').textContent = mensualTxt;
       document.getElementById('kpi-ipc-mensual').textContent = mensualTxt;
       document.getElementById('kpi-ipc-mensual-sub').textContent = mensualSubTxt;
+      document.getElementById('kpi-ipc-mensual-fecha').textContent = fechaTxt;
 
       // Interanual = idx_t / idx_{t-12} − 1 (cálculo exacto sobre nivel del IPC).
       const latestIdx = +series[series.length - 1][1];
@@ -1765,9 +1813,9 @@
 
       setBadgeLive(badge, lastRow.date);
     } catch (e) {
-      console.warn('IPC API falló, usando fallback', e);
+      console.warn('IPC: no se pudo usar API en vivo', e);
       renderIpc(FALLBACK.ipc.labels, FALLBACK.ipc.values, false);
-      setBadgeError(badge);
+      setBadgeFromError(badge, e);
     }
   }
 
@@ -1783,9 +1831,12 @@
 
       // Compute monthly % change
       const varMensual = indice.map((v, i) => i === 0 ? 0 : ((v / indice[i - 1]) - 1) * 100);
-      renderEmae(labels, indice, varMensual, true);
 
       const lastRow = last[last.length - 1];
+      assertFresh(lastRow[0], 'EMAE');
+
+      renderEmae(labels, indice, varMensual, true);
+
       const prev12 = last[last.length - 13];
       const valorTxt = fmtNum(+lastRow[1]);
       const fechaTxt = formatMonth(lastRow[0]);
@@ -1810,9 +1861,9 @@
 
       setBadgeLive(badge, lastRow[0]);
     } catch (e) {
-      console.warn('EMAE API falló, usando fallback', e);
+      console.warn('EMAE: no se pudo usar API en vivo', e);
       renderEmae(FALLBACK.emae.labels, FALLBACK.emae.values, FALLBACK.emae.varMensual, false);
-      setBadgeError(badge);
+      setBadgeFromError(badge, e);
     }
   }
 
@@ -1835,6 +1886,8 @@
       }));
 
       const last = salarioReal.slice(-60);
+      assertFresh(last[last.length - 1].date, 'Salario real');
+
       const labels = last.map(r => formatMonth(r.date));
       const indice = last.map(r => r.valor);
 
@@ -1864,11 +1917,11 @@
         varAnualLabel
       };
 
-      setBadgeLive(badge, last[last.length - 1].date ? salarioReal.slice(-1)[0].date : null);
+      setBadgeLive(badge, last[last.length - 1].date);
     } catch (e) {
-      console.warn('Salario API falló, usando fallback', e);
+      console.warn('Salario: no se pudo usar API en vivo', e);
       renderSalario(FALLBACK.salario.labels, FALLBACK.salario.indice, FALLBACK.salario.varAnual, false);
-      setBadgeError(badge);
+      setBadgeFromError(badge, e);
     }
   }
 
@@ -2051,6 +2104,7 @@
       renderIpc(d.ipc.labels, d.ipc.values, true);
       const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
       set('ipc-fecha', d.ipc.fechaLabel);
+      set('kpi-ipc-mensual-fecha', d.ipc.fechaLabel);
       set('ipc-mensual', d.ipc.mensual);
       set('ipc-mensual-sub', d.ipc.mensualSub);
       set('kpi-ipc-mensual', d.ipc.mensual);
