@@ -1270,7 +1270,8 @@
   const apiCache = new Map();
 
   async function fetchAPI(ids, opts = {}) {
-    const params = new URLSearchParams({ ids, limit: String(opts.limit || 300), format: 'json' });
+    // sort=desc en la petición → los N más recientes; revertimos en el cliente para tener orden cronológico.
+    const params = new URLSearchParams({ ids, limit: String(opts.limit || 300), format: 'json', sort: 'desc' });
     if (opts.start_date) params.append('start_date', opts.start_date);
     if (opts.representation_mode) params.append('representation_mode', opts.representation_mode);
     const url = `${API_BASE}?${params.toString()}`;
@@ -1278,6 +1279,7 @@
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
+    if (Array.isArray(json.data)) json.data = json.data.slice().reverse();
     apiCache.set(url, json);
     return json;
   }
