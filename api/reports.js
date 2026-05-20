@@ -5,7 +5,11 @@ const authToken = process.env.TURSO_AUTH_TOKEN;
 
 let db = null;
 function getDB() {
-  if (!url) throw new Error('TURSO_DATABASE_URL no configurada');
+  if (!url) throw new Error('TURSO_DATABASE_URL no está configurada en Vercel');
+  if (!authToken) throw new Error('TURSO_AUTH_TOKEN no está configurada en Vercel');
+  if (!/^libsql:\/\//.test(url) && !/^https?:\/\//.test(url)) {
+    throw new Error(`TURSO_DATABASE_URL inválida (debe empezar con libsql:// o https://). Recibido: "${url.slice(0, 30)}…"`);
+  }
   if (!db) db = createClient({ url, authToken });
   return db;
 }
@@ -109,6 +113,12 @@ export default async function handler(req, res) {
     return json(res, 405, { error: 'Método no permitido' });
   } catch (e) {
     console.error('api/reports error:', e);
-    return json(res, 500, { error: e.message || 'Error interno' });
+    return json(res, 500, {
+      error: e.message || 'Error interno',
+      code: e.code,
+      name: e.name,
+      hasUrl: !!process.env.TURSO_DATABASE_URL,
+      hasToken: !!process.env.TURSO_AUTH_TOKEN
+    });
   }
 }
