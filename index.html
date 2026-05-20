@@ -63,6 +63,15 @@
       height: auto;
       margin-bottom: 6px;
     }
+    .sidebar-brand .logo[data-failed] { display: none; }
+    .sidebar-brand .logo-fallback {
+      display: none;
+      color: #fff;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.3px;
+    }
+    .sidebar-brand .logo[data-failed] + .logo-fallback { display: block; }
     .sidebar-brand p {
       font-size: 11px;
       color: rgba(255,255,255,0.55);
@@ -589,7 +598,8 @@
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <img src="logo.png" alt="Simpleza SA" class="logo" />
+      <img src="logo.png" alt="Simpleza SA" class="logo" onerror="this.setAttribute('data-failed','1')" />
+      <div class="logo-fallback">Simpleza SA</div>
       <p>Coyuntura · <span id="brandMonth">Mayo 2026</span></p>
     </div>
 
@@ -1270,16 +1280,16 @@
   const apiCache = new Map();
 
   async function fetchAPI(ids, opts = {}) {
-    // sort=desc en la petición → los N más recientes; revertimos en el cliente para tener orden cronológico.
-    const params = new URLSearchParams({ ids, limit: String(opts.limit || 300), format: 'json', sort: 'desc' });
+    // apis.datos.gob.ar acepta ~1000 obs por request en sort=asc (default). Pedimos suficientes
+    // para tener todas las observaciones de las series mensuales que nos interesan (IPC: ~110,
+    // EMAE: ~265, Salarios: ~110); el slicing del último tramo se hace en cada caller.
+    const params = new URLSearchParams({ ids, limit: String(opts.limit || 800), format: 'json' });
     if (opts.start_date) params.append('start_date', opts.start_date);
-    if (opts.representation_mode) params.append('representation_mode', opts.representation_mode);
     const url = `${API_BASE}?${params.toString()}`;
     if (apiCache.has(url)) return apiCache.get(url);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-    if (Array.isArray(json.data)) json.data = json.data.slice().reverse();
     apiCache.set(url, json);
     return json;
   }
@@ -1706,45 +1716,54 @@
    * LIVE DATA WIRING
    * ============================================================ */
 
-  // IPC: serie 148.3_INIVELNAL_DICI_M_26 en representation percent_change
+  // IPC: serie 148.3_INIVELNAL_DICI_M_26 (índice de nivel general). Calculamos la variación
+  // mensual e interanual en el cliente sobre el índice crudo, en vez de pedir el representation
+  // `:percent_change` (que la API devuelve como proporción decimal y nos venía generando bugs).
   async function liveIpc() {
     const badge = document.getElementById('badge-ipc');
     try {
-      const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26:percent_change', { limit: 60 });
+      const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26', { limit: 800 });
       if (!json.data || json.data.length === 0) throw new Error('Sin datos');
-      // Most recent ~36 months
-      const last = json.data.slice(-36);
-      const labels = last.map(([d]) => formatMonth(d));
-      const values = last.map(([, v]) => +v);
+      const series = json.data.filter(r => r[1] != null);
+      if (series.length < 13) throw new Error('Pocas observaciones IPC');
+
+      // Variación mensual = (idx_t / idx_{t-1} - 1) * 100, computado en cliente.
+      const monthly = series.slice(1).map(([d, v], i) => ({
+        date: d,
+        valor: ((+v / +series[i][1]) - 1) * 100
+      }));
+      const last36 = monthly.slice(-36);
+      const labels = last36.map(r => formatMonth(r.date));
+      const values = last36.map(r => r.valor);
       renderIpc(labels, values, true);
 
       // KPIs
-      const lastRow = last[last.length - 1];
-      document.getElementById('ipc-fecha').textContent = formatMonth(lastRow[0]);
-      document.getElementById('ipc-mensual').textContent = fmtPct(+lastRow[1]);
-      document.getElementById('kpi-ipc-mensual').textContent = fmtPct(+lastRow[1]);
-      document.getElementById('kpi-ipc-mensual-sub').textContent = `Var. intermensual · ${formatMonth(lastRow[0])}`;
+      const lastRow = last36[last36.length - 1];
+      const fechaTxt = formatMonth(lastRow.date);
+      const mensualTxt = fmtPct(lastRow.valor);
+      const mensualSubTxt = `Var. intermensual · ${fechaTxt}`;
+      document.getElementById('ipc-fecha').textContent = fechaTxt;
+      document.getElementById('ipc-mensual').textContent = mensualTxt;
+      document.getElementById('kpi-ipc-mensual').textContent = mensualTxt;
+      document.getElementById('kpi-ipc-mensual-sub').textContent = mensualSubTxt;
 
-      // Interanual = compose (1+ri/100) over last 12 -1
-      const last12 = json.data.slice(-12);
-      let anualLabel = null;
-      if (last12.length === 12) {
-        const acum = last12.reduce((acc, [, v]) => acc * (1 + (+v) / 100), 1) - 1;
-        const pct = acum * 100;
-        anualLabel = fmtPct(pct);
-        document.getElementById('ipc-anual').textContent = anualLabel;
-        document.getElementById('kpi-ipc-anual').textContent = anualLabel;
-      }
+      // Interanual = idx_t / idx_{t-12} − 1 (cálculo exacto sobre nivel del IPC).
+      const latestIdx = +series[series.length - 1][1];
+      const yearAgoIdx = +series[series.length - 13][1];
+      const pct = ((latestIdx / yearAgoIdx) - 1) * 100;
+      const anualLabel = fmtPct(pct);
+      document.getElementById('ipc-anual').textContent = anualLabel;
+      document.getElementById('kpi-ipc-anual').textContent = anualLabel;
 
       currentSnapshot.ipc = {
         labels, values,
-        fechaLabel: formatMonth(lastRow[0]),
-        mensual: fmtPct(+lastRow[1]),
-        mensualSub: `Var. intermensual · ${formatMonth(lastRow[0])}`,
+        fechaLabel: fechaTxt,
+        mensual: mensualTxt,
+        mensualSub: mensualSubTxt,
         anual: anualLabel
       };
 
-      setBadgeLive(badge, lastRow[0]);
+      setBadgeLive(badge, lastRow.date);
     } catch (e) {
       console.warn('IPC API falló, usando fallback', e);
       renderIpc(FALLBACK.ipc.labels, FALLBACK.ipc.values, false);
@@ -1756,9 +1775,9 @@
   async function liveEmae() {
     const badge = document.getElementById('badge-emae');
     try {
-      const json = await fetchAPI('143.3_NO_PR_2004_A_21', { limit: 80 });
+      const json = await fetchAPI('143.3_NO_PR_2004_A_21', { limit: 400 });
       if (!json.data || json.data.length === 0) throw new Error('Sin datos');
-      const last = json.data.slice(-60);
+      const last = json.data.filter(r => r[1] != null).slice(-60);
       const labels = last.map(([d]) => formatMonth(d));
       const indice = last.map(([, v]) => +v);
 
@@ -1801,7 +1820,7 @@
   async function liveSalario() {
     const badge = document.getElementById('badge-salario');
     try {
-      const json = await fetchAPI('174.2_IS_2016_M_49,148.3_INIVELNAL_DICI_M_26', { limit: 120 });
+      const json = await fetchAPI('174.2_IS_2016_M_49,148.3_INIVELNAL_DICI_M_26', { limit: 300 });
       if (!json.data || json.data.length === 0) throw new Error('Sin datos');
 
       // Align series by date — json.data is [date, is_nominal, ipc_nivel]
@@ -1909,14 +1928,26 @@
     });
   }
 
+  async function apiCall(path, init) {
+    const r = await fetch(path, init);
+    const bodyText = await r.text();
+    let body = null;
+    try { body = bodyText ? JSON.parse(bodyText) : null; } catch { body = bodyText; }
+    if (!r.ok) {
+      const detail = typeof body === 'object' && body
+        ? (body.error || JSON.stringify(body))
+        : bodyText;
+      throw new Error(`HTTP ${r.status}: ${detail}`);
+    }
+    return body;
+  }
+
   async function listReports() {
     const listEl = document.getElementById('reportsList');
     const emptyEl = document.getElementById('reportsEmpty');
     const secEl = document.getElementById('reportsSection');
     try {
-      const r = await fetch('/api/reports');
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const { reports } = await r.json();
+      const { reports } = await apiCall('/api/reports');
       secEl.style.display = '';
       listEl.innerHTML = '';
       if (!reports || reports.length === 0) {
@@ -1972,12 +2003,11 @@
           ...currentSnapshot
         }
       };
-      const r = await fetch('/api/reports', {
+      await apiCall('/api/reports', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!r.ok) throw new Error(await r.text());
       await listReports();
     } catch (e) {
       console.error(e);
@@ -1990,9 +2020,7 @@
 
   async function loadReport(id) {
     try {
-      const r = await fetch(`/api/reports?id=${id}`);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const rep = await r.json();
+      const rep = await apiCall(`/api/reports?id=${id}`);
       viewingSnapshotId = id;
       applySnapshot(rep);
       const banner = document.getElementById('snapshotBanner');
@@ -2008,8 +2036,7 @@
 
   async function deleteReport(id) {
     try {
-      const r = await fetch(`/api/reports?id=${id}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      await apiCall(`/api/reports?id=${id}`, { method: 'DELETE' });
       if (id === viewingSnapshotId) exitSnapshot();
       await listReports();
     } catch (e) {
