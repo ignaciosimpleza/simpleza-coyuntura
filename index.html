@@ -57,17 +57,11 @@
       margin-bottom: 14px;
     }
     .sidebar-brand .logo {
-      display: flex; align-items: center; gap: 10px;
-      font-weight: 700; font-size: 17px;
-      color: #fff;
-    }
-    .sidebar-brand .logo .mark {
-      width: 28px; height: 28px;
-      border-radius: 8px;
-      background: var(--verde-menta);
-      display: grid; place-items: center;
-      color: var(--sidebar-bg);
-      font-weight: 800; font-size: 16px;
+      display: block;
+      max-width: 160px;
+      max-height: 48px;
+      height: auto;
+      margin-bottom: 6px;
     }
     .sidebar-brand p {
       font-size: 11px;
@@ -240,27 +234,6 @@
       border-radius: 999px;
       vertical-align: middle;
     }
-    .badge-live {
-      background: rgba(50, 232, 169, 0.16);
-      color: #138a5d;
-    }
-    .badge-live::before {
-      content: '';
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--verde-menta);
-      box-shadow: 0 0 0 0 rgba(50, 232, 169, 0.6);
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(50, 232, 169, 0.55); }
-      70% { box-shadow: 0 0 0 6px rgba(50, 232, 169, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(50, 232, 169, 0); }
-    }
-    .badge-error {
-      background: rgba(205, 97, 85, 0.14);
-      color: var(--terracota);
-    }
     .badge-static {
       background: rgba(108, 134, 140, 0.14);
       color: var(--azul-pizarra);
@@ -268,6 +241,55 @@
     .badge-loading {
       background: rgba(247, 220, 111, 0.22);
       color: #8a6d00;
+    }
+    /* Live badge: prominente. Color saturado, mayor tamaño, sombra, uppercase. */
+    .badge-live {
+      background: var(--verde-menta);
+      color: #062a1d;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px 6px 14px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      box-shadow: 0 4px 14px rgba(50, 232, 169, 0.45);
+      border: 1px solid rgba(6, 42, 29, 0.08);
+    }
+    .badge-live::before {
+      content: '';
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.9);
+      animation: pulse-live 1.6s infinite;
+    }
+    @keyframes pulse-live {
+      0%   { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.85); }
+      70%  { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+    }
+    .badge-error {
+      background: rgba(205, 97, 85, 0.18);
+      color: var(--terracota);
+      font-weight: 600;
+      font-size: 11.5px;
+      padding: 5px 11px;
+      border: 1px solid rgba(205, 97, 85, 0.3);
+    }
+    /* When a section's data is live, the section gets a subtle accent. */
+    .section.is-live .card {
+      border-color: rgba(50, 232, 169, 0.4);
+      box-shadow: 0 0 0 1px rgba(50, 232, 169, 0.15) inset;
+    }
+    .section.is-live .source::before {
+      content: '● ';
+      color: var(--verde-menta);
+      font-size: 10px;
+      margin-right: 2px;
+    }
+    .section.is-live .source {
+      color: #138a5d;
+      font-style: normal;
+      font-weight: 500;
     }
 
     /* === KPI grid === */
@@ -423,6 +445,102 @@
       color: var(--gris-oscuro);
     }
 
+    /* === Reportes guardados (sidebar) === */
+    .reports-list {
+      list-style: none;
+      padding: 0 14px 14px;
+    }
+    .reports-list li {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .reports-list li:hover { background: rgba(255,255,255,0.04); }
+    .reports-list li.active { background: rgba(247, 220, 111, 0.12); }
+    .reports-list a {
+      flex: 1;
+      color: rgba(255,255,255,0.72);
+      font-size: 12px;
+      cursor: pointer;
+      line-height: 1.3;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .reports-list a:hover { color: #fff; }
+    .reports-list .del {
+      background: none;
+      border: 0;
+      color: rgba(255,255,255,0.35);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .reports-list .del:hover { color: var(--terracota); background: rgba(205,97,85,0.1); }
+    .reports-empty {
+      padding: 6px 24px 14px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      font-style: italic;
+    }
+
+    /* === Topbar buttons === */
+    .topbar-actions { display: flex; align-items: center; gap: 10px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--gris-oscuro);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: var(--crema-fondo); border-color: var(--azul-pizarra); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary {
+      background: var(--verde-menta);
+      border-color: var(--verde-menta);
+      color: #062a1d;
+    }
+    .btn-primary:hover { background: #2bd398; border-color: #2bd398; }
+    .btn-icon {
+      width: 36px; height: 36px;
+      padding: 0;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 16px;
+    }
+    .btn.spinning .icon { display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* === Snapshot banner === */
+    .snapshot-banner {
+      display: none;
+      background: linear-gradient(90deg, #f7dc6f 0%, #f4d150 100%);
+      border: 1px solid #d4b53d;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .snapshot-banner.visible { display: flex; }
+    .snapshot-banner .info { font-size: 13px; color: #5a4a00; font-weight: 500; }
+    .snapshot-banner .info strong { color: #2d2400; }
+
     /* === Responsive === */
     @media (max-width: 1024px) {
       .two-col, .two-col.even { grid-template-columns: 1fr; }
@@ -442,6 +560,9 @@
       .hero { padding: 28px 22px; }
       .hero h1 { font-size: 28px; }
       .menu-toggle { display: inline-flex !important; }
+      .topbar-meta { display: none; }
+      .btn .label { display: none; }
+      .btn { padding: 7px 10px; }
     }
 
     .menu-toggle {
@@ -468,8 +589,8 @@
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <div class="logo"><span class="mark">S</span> Simpleza SA</div>
-      <p>Coyuntura · Mayo 2026</p>
+      <img src="logo.png" alt="Simpleza SA" class="logo" />
+      <p>Coyuntura · <span id="brandMonth">Mayo 2026</span></p>
     </div>
 
     <div class="nav-section-title">Contexto</div>
@@ -494,6 +615,12 @@
       <li><a href="#salario" data-title="Salario Real"><span class="dot"></span> Salario real</a></li>
     </ul>
 
+    <div id="reportsSection" style="display:none;">
+      <div class="nav-section-title">Reportes guardados</div>
+      <ul class="reports-list" id="reportsList"></ul>
+      <div class="reports-empty" id="reportsEmpty">Todavía no hay reportes guardados.</div>
+    </div>
+
     <div class="sidebar-footer">
       Datos en vivo desde<br>
       <strong style="color: var(--verde-menta);">apis.datos.gob.ar</strong>
@@ -508,11 +635,23 @@
         <span class="crumb">Coyuntura ·</span><span id="topbarTitle">Resumen ejecutivo</span>
       </div>
     </div>
-    <div class="topbar-meta">Reporte · <strong>Mayo 2026</strong></div>
+    <div class="topbar-actions">
+      <div class="topbar-meta">Reporte · <strong id="topbarMonth">Mayo 2026</strong></div>
+      <button class="btn btn-icon" id="refreshBtn" title="Re-consultar APIs en vivo" aria-label="Refrescar"><span class="icon">↻</span></button>
+      <button class="btn btn-primary" id="saveBtn" title="Guardar snapshot del estado actual"><span>+</span><span class="label">Guardar reporte</span></button>
+    </div>
   </header>
 
   <!-- ============ MAIN ============ -->
   <main class="main">
+
+    <!-- SNAPSHOT BANNER -->
+    <div class="snapshot-banner" id="snapshotBanner" role="status">
+      <div class="info">
+        📌 Estás viendo un reporte guardado: <strong id="snapshotTitle"></strong>
+      </div>
+      <button class="btn" id="exitSnapshotBtn">Volver al mes vigente</button>
+    </div>
 
     <!-- HERO -->
     <section class="hero" id="resumen">
@@ -998,8 +1137,8 @@
       <div class="sources">
         <div><span>Fuentes:</span> INDEC · BCRA · UTDT · The Heritage Foundation · FMI</div>
       </div>
-      <div>Datos en vivo desde <strong>apis.datos.gob.ar</strong>. Cuando la API responde, los KPIs y gráficos marcados con badge verde se actualizan automáticamente; si falla, se muestran los valores hardcodeados del cierre de mayo 2026.</div>
-      <div style="margin-top: 10px;">© Simpleza SA · Coyuntura Económica Argentina · Mayo 2026</div>
+      <div>Datos en vivo desde <strong>apis.datos.gob.ar</strong>. Las secciones marcadas con el badge verde <strong>EN VIVO</strong> se actualizan automáticamente cuando la API responde; si falla, se muestran los valores en caché del último cierre.</div>
+      <div style="margin-top: 10px;">© Simpleza SA · Coyuntura Económica Argentina · <span id="footerMonth">Mayo 2026</span></div>
     </footer>
 
   </main>
@@ -1147,11 +1286,15 @@
     if (!el) return;
     el.className = 'badge badge-live';
     el.textContent = `En vivo · ${formatMonth(lastDate)}`;
+    const sec = el.closest('.section');
+    if (sec) { sec.classList.add('is-live'); sec.classList.remove('is-error'); }
   }
   function setBadgeError(el) {
     if (!el) return;
     el.className = 'badge badge-error';
     el.textContent = 'Sin conexión · datos en caché';
+    const sec = el.closest('.section');
+    if (sec) { sec.classList.remove('is-live'); sec.classList.add('is-error'); }
   }
   function formatMonth(dateStr) {
     if (!dateStr) return '';
@@ -1582,12 +1725,22 @@
 
       // Interanual = compose (1+ri/100) over last 12 -1
       const last12 = json.data.slice(-12);
+      let anualLabel = null;
       if (last12.length === 12) {
         const acum = last12.reduce((acc, [, v]) => acc * (1 + (+v) / 100), 1) - 1;
         const pct = acum * 100;
-        document.getElementById('ipc-anual').textContent = fmtPct(pct);
-        document.getElementById('kpi-ipc-anual').textContent = fmtPct(pct);
+        anualLabel = fmtPct(pct);
+        document.getElementById('ipc-anual').textContent = anualLabel;
+        document.getElementById('kpi-ipc-anual').textContent = anualLabel;
       }
+
+      currentSnapshot.ipc = {
+        labels, values,
+        fechaLabel: formatMonth(lastRow[0]),
+        mensual: fmtPct(+lastRow[1]),
+        mensualSub: `Var. intermensual · ${formatMonth(lastRow[0])}`,
+        anual: anualLabel
+      };
 
       setBadgeLive(badge, lastRow[0]);
     } catch (e) {
@@ -1613,14 +1766,26 @@
 
       const lastRow = last[last.length - 1];
       const prev12 = last[last.length - 13];
-      document.getElementById('emae-fecha').textContent = formatMonth(lastRow[0]);
-      document.getElementById('emae-valor').textContent = fmtNum(+lastRow[1]);
-      document.getElementById('kpi-emae').textContent = fmtNum(+lastRow[1]);
-      document.getElementById('kpi-emae-sub').textContent = `EMAE · ${formatMonth(lastRow[0])}`;
+      const valorTxt = fmtNum(+lastRow[1]);
+      const fechaTxt = formatMonth(lastRow[0]);
+      document.getElementById('emae-fecha').textContent = fechaTxt;
+      document.getElementById('emae-valor').textContent = valorTxt;
+      document.getElementById('kpi-emae').textContent = valorTxt;
+      document.getElementById('kpi-emae-sub').textContent = `EMAE · ${fechaTxt}`;
+      let varAnualLabel = null;
       if (prev12) {
         const varA = ((+lastRow[1] / +prev12[1]) - 1) * 100;
-        document.getElementById('emae-var-anual').textContent = (varA >= 0 ? '+' : '') + fmtPct(varA);
+        varAnualLabel = (varA >= 0 ? '+' : '') + fmtPct(varA);
+        document.getElementById('emae-var-anual').textContent = varAnualLabel;
       }
+
+      currentSnapshot.emae = {
+        labels, indice, varMensual,
+        fechaLabel: fechaTxt,
+        valor: valorTxt,
+        valorSub: `EMAE · ${fechaTxt}`,
+        varAnualLabel
+      };
 
       setBadgeLive(badge, lastRow[0]);
     } catch (e) {
@@ -1659,11 +1824,24 @@
 
       const lastVal = indice[indice.length - 1];
       const va = varAnual[varAnual.length - 1];
-      document.getElementById('salario-indice').textContent = fmtNum(lastVal);
-      document.getElementById('salario-indice-sub').textContent = `Base ${formatMonth(rows[0][0])} = 100`;
+      const valorTxt = fmtNum(lastVal);
+      const valorSub = `Base ${formatMonth(rows[0][0])} = 100`;
+      const fechaTxt = formatMonth(salarioReal.slice(-1)[0].date);
+      document.getElementById('salario-indice').textContent = valorTxt;
+      document.getElementById('salario-indice-sub').textContent = valorSub;
+      let varAnualLabel = null;
       if (va != null) {
-        document.getElementById('salario-var').textContent = (va >= 0 ? '+' : '') + fmtPct(va);
+        varAnualLabel = (va >= 0 ? '+' : '') + fmtPct(va);
+        document.getElementById('salario-var').textContent = varAnualLabel;
       }
+
+      currentSnapshot.salario = {
+        labels, indice, varAnual,
+        fechaLabel: fechaTxt,
+        valor: valorTxt,
+        valorSub,
+        varAnualLabel
+      };
 
       setBadgeLive(badge, last[last.length - 1].date ? salarioReal.slice(-1)[0].date : null);
     } catch (e) {
@@ -1705,6 +1883,210 @@
   }
 
   /* ============================================================
+   * SNAPSHOT STATE + REPORTES PERSISTIDOS (Turso)
+   * ============================================================ */
+  // Capturado por liveIpc/liveEmae/liveSalario cada vez que devuelve la API.
+  // Lo que se guarda en /api/reports cuando el usuario aprieta "Guardar reporte".
+  const currentSnapshot = { ipc: null, emae: null, salario: null };
+  let viewingSnapshotId = null;
+
+  function getCurrentMonth() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  function getCurrentMonthLabel() {
+    const d = new Date();
+    const m = d.toLocaleDateString('es-AR', { month: 'long' });
+    return `${m.charAt(0).toUpperCase()}${m.slice(1)} ${d.getFullYear()}`;
+  }
+  function setCurrentMonthLabel() {
+    const lbl = getCurrentMonthLabel();
+    ['topbarMonth', 'brandMonth', 'footerMonth'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = lbl;
+    });
+  }
+
+  async function listReports() {
+    const listEl = document.getElementById('reportsList');
+    const emptyEl = document.getElementById('reportsEmpty');
+    const secEl = document.getElementById('reportsSection');
+    try {
+      const r = await fetch('/api/reports');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const { reports } = await r.json();
+      secEl.style.display = '';
+      listEl.innerHTML = '';
+      if (!reports || reports.length === 0) {
+        emptyEl.style.display = '';
+        return;
+      }
+      emptyEl.style.display = 'none';
+      reports.forEach(rep => {
+        const li = document.createElement('li');
+        if (rep.id === viewingSnapshotId) li.classList.add('active');
+        li.innerHTML = `
+          <a data-id="${rep.id}" title="${rep.title}">${rep.title}</a>
+          <button class="del" data-id="${rep.id}" aria-label="Eliminar reporte">×</button>
+        `;
+        listEl.appendChild(li);
+      });
+      listEl.querySelectorAll('a[data-id]').forEach(a => {
+        a.addEventListener('click', () => loadReport(Number(a.dataset.id)));
+      });
+      listEl.querySelectorAll('button.del[data-id]').forEach(b => {
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm('¿Eliminar este reporte guardado?')) {
+            deleteReport(Number(b.dataset.id));
+          }
+        });
+      });
+    } catch (e) {
+      // API no disponible (Turso no configurado o sin red): ocultar UI de reportes
+      console.warn('Reportes no disponibles:', e.message);
+      secEl.style.display = 'none';
+      const saveBtn = document.getElementById('saveBtn');
+      if (saveBtn) saveBtn.style.display = 'none';
+    }
+  }
+
+  async function saveCurrentReport() {
+    const btn = document.getElementById('saveBtn');
+    if (!btn) return;
+    if (!currentSnapshot.ipc && !currentSnapshot.emae && !currentSnapshot.salario) {
+      alert('Esperá a que carguen los datos en vivo antes de guardar.');
+      return;
+    }
+    btn.disabled = true;
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<span>…</span><span class="label">Guardando</span>';
+    try {
+      const month = getCurrentMonth();
+      const payload = {
+        month,
+        data: {
+          capturedAt: new Date().toISOString(),
+          ...currentSnapshot
+        }
+      };
+      const r = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!r.ok) throw new Error(await r.text());
+      await listReports();
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo guardar el reporte: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+  }
+
+  async function loadReport(id) {
+    try {
+      const r = await fetch(`/api/reports?id=${id}`);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const rep = await r.json();
+      viewingSnapshotId = id;
+      applySnapshot(rep);
+      const banner = document.getElementById('snapshotBanner');
+      document.getElementById('snapshotTitle').textContent = rep.title;
+      banner.classList.add('visible');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      await listReports();
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo cargar el reporte: ' + e.message);
+    }
+  }
+
+  async function deleteReport(id) {
+    try {
+      const r = await fetch(`/api/reports?id=${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (id === viewingSnapshotId) exitSnapshot();
+      await listReports();
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo eliminar: ' + e.message);
+    }
+  }
+
+  function applySnapshot(rep) {
+    const d = rep.data || {};
+    if (d.ipc) {
+      renderIpc(d.ipc.labels, d.ipc.values, true);
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
+      set('ipc-fecha', d.ipc.fechaLabel);
+      set('ipc-mensual', d.ipc.mensual);
+      set('ipc-mensual-sub', d.ipc.mensualSub);
+      set('kpi-ipc-mensual', d.ipc.mensual);
+      set('kpi-ipc-mensual-sub', d.ipc.mensualSub);
+      set('ipc-anual', d.ipc.anual);
+      set('kpi-ipc-anual', d.ipc.anual);
+      const badge = document.getElementById('badge-ipc');
+      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.ipc.fechaLabel || ''}`; }
+    }
+    if (d.emae) {
+      renderEmae(d.emae.labels, d.emae.indice, d.emae.varMensual, true);
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
+      set('emae-fecha', d.emae.fechaLabel);
+      set('emae-valor', d.emae.valor);
+      set('kpi-emae', d.emae.valor);
+      set('kpi-emae-sub', d.emae.valorSub);
+      set('emae-var-anual', d.emae.varAnualLabel);
+      const badge = document.getElementById('badge-emae');
+      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.emae.fechaLabel || ''}`; }
+    }
+    if (d.salario) {
+      renderSalario(d.salario.labels, d.salario.indice, d.salario.varAnual, true);
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
+      set('salario-indice', d.salario.valor);
+      set('salario-indice-sub', d.salario.valorSub);
+      set('salario-var', d.salario.varAnualLabel);
+      const badge = document.getElementById('badge-salario');
+      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.salario.fechaLabel || ''}`; }
+    }
+    document.querySelectorAll('.section.is-live').forEach(s => s.classList.remove('is-live'));
+  }
+
+  function exitSnapshot() {
+    viewingSnapshotId = null;
+    document.getElementById('snapshotBanner').classList.remove('visible');
+    fetchAllLive();
+    listReports();
+  }
+
+  function wireReportsUI() {
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', saveCurrentReport);
+    const exitBtn = document.getElementById('exitSnapshotBtn');
+    if (exitBtn) exitBtn.addEventListener('click', exitSnapshot);
+    listReports();
+  }
+
+  function wireRefreshButton() {
+    const btn = document.getElementById('refreshBtn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      btn.classList.add('spinning');
+      btn.disabled = true;
+      apiCache.clear();
+      if (viewingSnapshotId) exitSnapshot();
+      await fetchAllLive();
+      setTimeout(() => { btn.classList.remove('spinning'); btn.disabled = false; }, 600);
+    });
+  }
+
+  async function fetchAllLive() {
+    await Promise.all([liveIpc(), liveEmae(), liveSalario()]);
+  }
+
+  /* ============================================================
    * BOOT
    * ============================================================ */
   document.addEventListener('DOMContentLoaded', () => {
@@ -1724,11 +2106,12 @@
     renderSalario(FALLBACK.salario.labels, FALLBACK.salario.indice, FALLBACK.salario.varAnual, false);
 
     initNav();
+    setCurrentMonthLabel();
+    wireRefreshButton();
+    wireReportsUI();
 
     // Fetch live data in parallel
-    liveIpc();
-    liveEmae();
-    liveSalario();
+    fetchAllLive();
   });
   </script>
 </body>
