@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Coyuntura Económica Argentina · Mayo 2026 — Simpleza SA</title>
+  <title id="pageTitle">Coyuntura Económica Argentina — Simpleza SA</title>
+  <link rel="icon" type="image/png" href="logo.png" />
+  <meta name="description" content="Reporte interactivo de coyuntura económica argentina por Simpleza SA, con datos en vivo de INDEC, BCRA y UTDT." />
+  <meta property="og:title" content="Coyuntura Económica Argentina — Simpleza SA" />
+  <meta property="og:description" content="Reporte interactivo de coyuntura económica argentina." />
+  <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -1759,22 +1764,48 @@
    * LIVE DATA WIRING
    * ============================================================ */
 
-  // IPC: serie 148.3_INIVELNAL_DICI_M_26 (índice de nivel general). Calculamos la variación
-  // mensual e interanual en el cliente sobre el índice crudo, en vez de pedir el representation
-  // `:percent_change` (que la API devuelve como proporción decimal y nos venía generando bugs).
+  // IPC: serie 148.3_INIVELNAL_DICI_M_26. Intentamos primero el índice de nivel general
+  // (computando la variación en cliente — más preciso) y, si la API no expone el índice,
+  // caemos al representation `:percent_change` (proporción decimal: 0.034 = 3.4%, convertimos *100).
   async function liveIpc() {
     const badge = document.getElementById('badge-ipc');
     try {
-      const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26', { limit: 800 });
-      if (!json.data || json.data.length === 0) throw new Error('Sin datos');
-      const series = json.data.filter(r => r[1] != null);
-      if (series.length < 13) throw new Error('Pocas observaciones IPC');
+      // Estrategia 1: índice de nivel. Los valores deberían ser >= 50 (IPC base dic-2016=100
+      // ha subido mucho desde entonces). Si los valores parecen proporciones (~0.03), descartamos.
+      let monthly = null;
+      let yearOverYearPct = null;
+      try {
+        const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26', { limit: 800 });
+        const series = (json.data || []).filter(r => r[1] != null);
+        if (series.length >= 13) {
+          const sampleVal = +series[series.length - 1][1];
+          if (sampleVal >= 30) {
+            // Es un índice válido. Computamos variaciones.
+            monthly = series.slice(1).map(([d, v], i) => ({
+              date: d,
+              valor: ((+v / +series[i][1]) - 1) * 100
+            }));
+            const latestIdx = +series[series.length - 1][1];
+            const yearAgoIdx = +series[series.length - 13][1];
+            yearOverYearPct = ((latestIdx / yearAgoIdx) - 1) * 100;
+          }
+        }
+      } catch (e) {
+        console.warn('IPC nivel falló, intento percent_change', e);
+      }
 
-      // Variación mensual = (idx_t / idx_{t-1} - 1) * 100, computado en cliente.
-      const monthly = series.slice(1).map(([d, v], i) => ({
-        date: d,
-        valor: ((+v / +series[i][1]) - 1) * 100
-      }));
+      // Estrategia 2: percent_change. La API devuelve proporciones decimales — convertimos a %.
+      if (!monthly) {
+        const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26:percent_change', { limit: 800 });
+        const series = (json.data || []).filter(r => r[1] != null);
+        if (series.length < 13) throw new Error('IPC: pocas observaciones disponibles');
+        monthly = series.map(([d, v]) => ({ date: d, valor: +v * 100 }));
+        // Interanual compuesta sobre los últimos 12 meses
+        const last12 = monthly.slice(-12);
+        const acum = last12.reduce((acc, r) => acc * (1 + r.valor / 100), 1) - 1;
+        yearOverYearPct = acum * 100;
+      }
+
       const last36 = monthly.slice(-36);
 
       // Validar frescura ANTES de pintar nada — si la API devolvió data vieja
@@ -1795,11 +1826,8 @@
       document.getElementById('kpi-ipc-mensual-sub').textContent = mensualSubTxt;
       document.getElementById('kpi-ipc-mensual-fecha').textContent = fechaTxt;
 
-      // Interanual = idx_t / idx_{t-12} − 1 (cálculo exacto sobre nivel del IPC).
-      const latestIdx = +series[series.length - 1][1];
-      const yearAgoIdx = +series[series.length - 13][1];
-      const pct = ((latestIdx / yearAgoIdx) - 1) * 100;
-      const anualLabel = fmtPct(pct);
+      // Interanual: ya fue calculado por cualquiera de las dos estrategias.
+      const anualLabel = yearOverYearPct != null ? fmtPct(yearOverYearPct) : '—';
       document.getElementById('ipc-anual').textContent = anualLabel;
       document.getElementById('kpi-ipc-anual').textContent = anualLabel;
 
@@ -1979,6 +2007,7 @@
       const el = document.getElementById(id);
       if (el) el.textContent = lbl;
     });
+    document.title = `Coyuntura · ${lbl} — Simpleza SA`;
   }
 
   async function apiCall(path, init) {
