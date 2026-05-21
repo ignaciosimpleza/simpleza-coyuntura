@@ -633,15 +633,64 @@
     .snapshot-banner .info strong { color: #2d2400; }
 
     /* === Print / PDF === */
-    /* En pantalla, el header de impresión está oculto */
+    /* En pantalla, los elementos exclusivos de impresión están ocultos */
     .print-only { display: none; }
 
-    @page { size: A4 portrait; margin: 14mm 14mm 16mm; }
+    /* Páginas de contenido: header con eyebrow del reporte, footer con web + nº de página.
+       Se inyecta el mes vigente vía JS antes de imprimir (CSS @page no admite variables). */
+    @page {
+      size: A4 portrait;
+      margin: 22mm 16mm 20mm;
+      @top-left {
+        content: "Coyuntura Económica Argentina";
+        font-family: 'Sora', sans-serif;
+        font-size: 8pt;
+        font-weight: 600;
+        color: #6C868C;
+        letter-spacing: 0.6px;
+      }
+      @top-right {
+        content: "Simpleza SA";
+        font-family: 'Sora', sans-serif;
+        font-size: 8pt;
+        font-weight: 600;
+        color: #6C868C;
+      }
+      @bottom-left {
+        content: "simpleza.com.ar";
+        font-family: 'Sora', sans-serif;
+        font-size: 8pt;
+        color: #6C868C;
+      }
+      @bottom-right {
+        content: counter(page) " / " counter(pages);
+        font-family: 'Sora', sans-serif;
+        font-size: 8pt;
+        color: #6C868C;
+      }
+      @bottom-center {
+        content: "Reporte mensual";
+        font-family: 'Sora', sans-serif;
+        font-size: 8pt;
+        color: #6C868C;
+      }
+    }
+    /* Portada y contraportada: sin header / footer impreso */
+    @page :first {
+      margin: 0;
+      @top-left { content: ""; } @top-right { content: ""; }
+      @bottom-left { content: ""; } @bottom-right { content: ""; } @bottom-center { content: ""; }
+    }
+    @page back-page {
+      margin: 0;
+      @top-left { content: ""; } @top-right { content: ""; }
+      @bottom-left { content: ""; } @bottom-right { content: ""; } @bottom-center { content: ""; }
+    }
 
     @media print {
       /* Reset cromático y de chrome del browser */
       html, body { background: #fff !important; color: #2b2b2b !important; }
-      body { font-size: 11pt; }
+      body { font-size: 10.5pt; }
 
       /* Ocultar todo lo que no es contenido del reporte */
       .sidebar, .topbar, .snapshot-banner, .menu-toggle,
@@ -649,37 +698,110 @@
 
       .main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
 
-      /* Cabecera de impresión visible sólo en PDF */
+      /* === PORTADA (página 1) === */
       .print-only { display: block; }
-      .print-header {
+      .print-cover {
+        page-break-after: always;
+        break-after: page;
+        height: 297mm;
+        width: 210mm;
+        padding: 22mm 24mm 20mm;
+        box-sizing: border-box;
+        background: linear-gradient(155deg, #fff 0%, #fff 55%, #f6efe2 100%) !important;
         display: flex !important;
-        align-items: center;
-        gap: 16px;
-        padding-bottom: 10px;
-        margin-bottom: 18px;
-        border-bottom: 2px solid #1a2426;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
       }
-      .print-logo { max-height: 36px; max-width: 140px; filter: invert(1) brightness(0.2); }
-      .print-title { flex: 1; }
-      .print-eyebrow { font-size: 9pt; letter-spacing: 1.4px; text-transform: uppercase; color: #6C868C; font-weight: 600; }
-      .print-month { font-size: 15pt; font-weight: 700; color: #1a2426; margin-top: 2px; }
+      .print-cover::after {
+        content: '';
+        position: absolute;
+        top: -80mm; right: -80mm;
+        width: 220mm; height: 220mm;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(50, 232, 169, 0.18) 0%, transparent 65%);
+      }
+      .print-cover-top { display: flex; align-items: center; }
+      .print-cover-logo {
+        max-height: 56px;
+        max-width: 200px;
+        filter: invert(1) brightness(0.16);
+      }
+      .print-cover-body { flex: 1; display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 1; }
+      .print-cover-rule { width: 60px; height: 3px; background: var(--verde-menta); margin-bottom: 14px; }
+      .print-cover-eyebrow {
+        font-size: 9pt;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #6C868C;
+        font-weight: 700;
+        margin-bottom: 18px;
+      }
+      .print-cover-title {
+        font-size: 50pt;
+        font-weight: 800;
+        line-height: 0.98;
+        letter-spacing: -1.8px;
+        color: #1a2426;
+        margin: 0 0 22px;
+      }
+      .print-cover-subtitle {
+        font-size: 14pt;
+        font-weight: 400;
+        color: #6C868C;
+        line-height: 1.35;
+        max-width: 130mm;
+        margin: 0;
+      }
+      .print-cover-accent {
+        width: 100mm; height: 4px; background: var(--verde-menta);
+        margin-top: 30mm;
+      }
+      .print-cover-footer {
+        display: flex; justify-content: space-between; align-items: flex-end;
+        font-size: 9pt; color: #4d4d4d; line-height: 1.5;
+        border-top: 1px solid #d4d4d4; padding-top: 12px;
+        position: relative; z-index: 1;
+      }
+      .print-cover-footer strong { color: #1a2426; font-weight: 700; }
+      .print-cover-url { font-weight: 700; color: var(--gris-oscuro); letter-spacing: 0.3px; }
 
-      /* Layout / colores adaptados a papel */
+      /* === Wrapper de contenido — empieza la primera página de contenido con un poco
+            más de aire arriba, ya que el header @page ya provee separación. === */
       .hero {
         background: #f6efe2 !important;
-        padding: 18px 20px !important;
+        padding: 18px 22px !important;
         margin-bottom: 22px !important;
         border: 1px solid #e0d3bd !important;
+        border-left: 4px solid var(--verde-menta) !important;
+        page-break-after: avoid;
+        break-after: avoid-page;
       }
       .hero::before { display: none !important; }
-      .hero h1 { font-size: 22pt !important; margin-bottom: 8px !important; }
-      .hero p { font-size: 10.5pt !important; }
+      .hero h1 { font-size: 20pt !important; margin-bottom: 8px !important; line-height: 1.15 !important; }
+      .hero .eyebrow { font-size: 8.5pt !important; }
+      .hero p { font-size: 10pt !important; }
 
-      .section { margin-bottom: 18px !important; page-break-inside: auto; break-inside: auto; }
+      /* Numeración estilo consultora: 01 · 02 · 03 ...
+         Aplicado sólo a .section (no .print-cover ni .print-back). El hero (#resumen)
+         tiene clase .hero, no .section, así que tampoco entra en el conteo. */
+      .main { counter-reset: section-counter; }
+      .main > .section { counter-increment: section-counter; }
+      .main > .section .section-eyebrow::before {
+        content: counter(section-counter, decimal-leading-zero) " · ";
+        color: var(--verde-menta);
+        font-weight: 800;
+      }
+
+      .section {
+        margin-bottom: 18px !important;
+        page-break-inside: auto;
+        break-inside: auto;
+      }
       .section-header { margin-bottom: 12px !important; page-break-after: avoid; break-after: avoid; }
-      .section-title { font-size: 16pt !important; }
-      .section-eyebrow { font-size: 9pt !important; }
-      .section-lead { font-size: 10pt !important; }
+      .section-title { font-size: 15pt !important; margin-bottom: 6px !important; letter-spacing: -0.2px !important; }
+      .section-eyebrow { font-size: 8.5pt !important; }
+      .section-lead { font-size: 9.5pt !important; }
 
       /* No partir cards, kpi-grids, tablas o gráficos a la mitad */
       .card, .kpi-grid, .kpi-card, table, .chart-wrap {
@@ -688,34 +810,111 @@
       }
 
       .kpi-grid { gap: 8px !important; margin-bottom: 12px !important; }
-      .kpi-card { padding: 10px 12px !important; }
-      .kpi-label { font-size: 8pt !important; }
+      .kpi-card { padding: 10px 14px !important; }
+      .kpi-card.accent { border-left-width: 3px !important; }
+      .kpi-label { font-size: 7.5pt !important; letter-spacing: 0.9px !important; }
       .kpi-value { font-size: 16pt !important; }
-      .kpi-value.small { font-size: 12pt !important; }
-      .kpi-sub, .kpi-delta { font-size: 8.5pt !important; }
+      .kpi-value.small { font-size: 11pt !important; }
+      .kpi-sub, .kpi-delta { font-size: 8pt !important; }
 
-      .card { padding: 14px !important; border: 1px solid #d4d4d4 !important; box-shadow: none !important; margin-bottom: 8px !important; }
-      .card-title { font-size: 10pt !important; }
-      .card-title small { font-size: 8.5pt !important; }
+      .card { padding: 12px 14px !important; border: 1px solid #e0e0e0 !important; box-shadow: none !important; margin-bottom: 8px !important; }
+      .card-title { font-size: 10pt !important; font-weight: 700 !important; }
+      .card-title small { font-size: 8.5pt !important; font-weight: 400 !important; }
 
-      .chart-wrap { height: 8.5cm !important; }
+      .chart-wrap { height: 8cm !important; }
       .chart-wrap.tall { height: 9cm !important; }
-      .chart-wrap.short { height: 6.5cm !important; }
+      .chart-wrap.short { height: 6cm !important; }
 
-      table { font-size: 8.5pt !important; }
-      th { font-size: 7.5pt !important; padding: 6px 8px !important; background: #f0e6d6 !important; }
-      td { padding: 4px 8px !important; }
+      table { font-size: 8pt !important; }
+      th { font-size: 7pt !important; padding: 5px 7px !important; background: #f0e6d6 !important; letter-spacing: 0.4px !important; }
+      td { padding: 3px 7px !important; }
 
-      .source { font-size: 8pt !important; font-style: italic !important; color: #777 !important; }
-      .source::before { content: '' !important; }   /* Sin bullet verde en el PDF */
-      .badge { display: none !important; }          /* Sin badges de "EN VIVO" en el PDF */
-      .section.is-live .card { border-color: #d4d4d4 !important; box-shadow: none !important; }
-      .section.is-live .source { color: #777 !important; font-weight: 400 !important; }
+      .source { font-size: 7.5pt !important; font-style: italic !important; color: #888 !important; }
+      .source::before { content: '' !important; }
+      .badge { display: none !important; }
+      .section.is-live .card { border-color: #e0e0e0 !important; box-shadow: none !important; }
+      .section.is-live .source { color: #888 !important; font-weight: 400 !important; }
 
-      /* Mantener layout de 2 columnas si entra en el ancho de la hoja */
-      .two-col { gap: 8px !important; }
+      .two-col { gap: 10px !important; }
 
-      footer { font-size: 8pt !important; margin-top: 20px !important; padding-top: 10px !important; }
+      footer { font-size: 8pt !important; margin-top: 18px !important; padding-top: 10px !important; border-top: 1px solid #e0e0e0 !important; color: #888 !important; }
+      footer strong { color: #4d4d4d !important; }
+
+      /* === CIERRE / contraportada === */
+      .print-back {
+        page-break-before: always;
+        break-before: page;
+        page: back-page;
+        height: 297mm;
+        width: 210mm;
+        padding: 30mm 26mm;
+        box-sizing: border-box;
+        position: relative;
+        background: #fff;
+        display: flex !important;
+        flex-direction: column;
+      }
+      .print-back-mark {
+        width: 80px; height: 4px;
+        background: var(--verde-menta);
+        margin-bottom: 28px;
+      }
+      .print-back-title {
+        font-size: 18pt;
+        font-weight: 700;
+        color: #1a2426;
+        margin: 0 0 12px;
+        letter-spacing: -0.3px;
+      }
+      .print-back-title + .print-back-lead { margin-bottom: 30px; }
+      .print-back-lead {
+        font-size: 11pt;
+        line-height: 1.5;
+        color: #4d4d4d;
+        max-width: 145mm;
+        margin: 0 0 12px;
+      }
+      .print-cta {
+        margin: 24px 0;
+        background: #f6efe2;
+        border-left: 4px solid var(--verde-menta);
+        padding: 18px 22px;
+        border-radius: 4px;
+      }
+      .print-cta-row {
+        display: flex;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(108, 134, 140, 0.18);
+        font-size: 11pt;
+      }
+      .print-cta-row:last-child { border-bottom: 0; }
+      .print-cta-label {
+        flex: 0 0 38mm;
+        font-size: 8.5pt;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: #6C868C;
+        font-weight: 600;
+        padding-top: 2px;
+      }
+      .print-cta-value {
+        flex: 1;
+        font-weight: 600;
+        color: #1a2426;
+      }
+      .print-back-footer {
+        margin-top: auto;
+        padding-top: 20px;
+        border-top: 1px solid #d4d4d4;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 9pt;
+        color: #6C868C;
+        line-height: 1.5;
+      }
+      .print-back-footer strong { color: #1a2426; }
+      .print-back-logo { max-height: 40px; max-width: 140px; filter: invert(1) brightness(0.16); }
 
       /* Forzar contención de colores de Chart.js / cards */
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -828,14 +1027,26 @@
   <!-- ============ MAIN ============ -->
   <main class="main">
 
-    <!-- Cabecera que sólo aparece al imprimir/exportar PDF -->
-    <div class="print-only print-header">
-      <img src="logo.png" alt="Simpleza SA" class="print-logo" onerror="this.style.display='none'" />
-      <div class="print-title">
-        <div class="print-eyebrow">Coyuntura Económica Argentina · Simpleza SA</div>
-        <div class="print-month" id="printMonth">Mayo 2026</div>
+    <!-- ============ PORTADA — sólo visible al imprimir/exportar PDF ============ -->
+    <section class="print-only print-cover" aria-hidden="true">
+      <div class="print-cover-top">
+        <img src="logo.png" alt="Simpleza SA" class="print-cover-logo" onerror="this.style.display='none'" />
       </div>
-    </div>
+      <div class="print-cover-body">
+        <div class="print-cover-rule"></div>
+        <div class="print-cover-eyebrow">Reporte mensual · <span id="printCoverMonth">Mayo 2026</span></div>
+        <h1 class="print-cover-title">Coyuntura<br/>Económica<br/>Argentina</h1>
+        <p class="print-cover-subtitle">La heterogeneidad y la adoptabilidad del modelo.</p>
+        <div class="print-cover-accent"></div>
+      </div>
+      <div class="print-cover-footer">
+        <div>
+          <strong>Simpleza SA</strong> · Consultoría económica<br/>
+          Fuentes: INDEC · BCRA · UTDT · The Heritage Foundation · FMI
+        </div>
+        <div class="print-cover-url">simpleza.com.ar</div>
+      </div>
+    </section>
 
     <!-- SNAPSHOT BANNER -->
     <div class="snapshot-banner" id="snapshotBanner" role="status">
@@ -1332,6 +1543,47 @@
       <div>Datos en vivo desde <strong>apis.datos.gob.ar</strong>. Las secciones marcadas con el badge verde <strong>EN VIVO</strong> se actualizan automáticamente cuando la API responde; si falla, se muestran los valores en caché del último cierre.</div>
       <div style="margin-top: 10px;">© Simpleza SA · Coyuntura Económica Argentina · <span id="footerMonth">Mayo 2026</span></div>
     </footer>
+
+    <!-- ============ CIERRE — sólo visible al imprimir/exportar PDF ============ -->
+    <section class="print-only print-back" aria-hidden="true">
+      <div class="print-back-mark"></div>
+      <h2 class="print-back-title">Sobre este reporte</h2>
+      <p class="print-back-lead">
+        Coyuntura Económica Argentina es un reporte mensual de Simpleza SA construido sobre
+        datos oficiales de INDEC, BCRA y UTDT, integrados con análisis y curación de
+        nuestro equipo. La versión interactiva — con datos en vivo y series históricas
+        completas — está disponible online.
+      </p>
+
+      <h2 class="print-back-title">¿Querés profundizar el análisis con tu equipo?</h2>
+      <p class="print-back-lead">
+        En Simpleza acompañamos a empresas en consultoría económica, valuaciones,
+        fondos de maniobra, due diligence y planeamiento financiero. Conversemos.
+      </p>
+
+      <div class="print-cta">
+        <div class="print-cta-row">
+          <span class="print-cta-label">Web</span>
+          <span class="print-cta-value">www.simpleza.com.ar</span>
+        </div>
+        <div class="print-cta-row">
+          <span class="print-cta-label">Contacto</span>
+          <span class="print-cta-value">ignacio@simplezasa.com</span>
+        </div>
+        <div class="print-cta-row">
+          <span class="print-cta-label">Versión online</span>
+          <span class="print-cta-value">simpleza-coyuntura.vercel.app</span>
+        </div>
+      </div>
+
+      <div class="print-back-footer">
+        <img src="logo.png" alt="Simpleza SA" class="print-back-logo" onerror="this.style.display='none'" />
+        <div>
+          <strong>Simpleza SA</strong> · Consultoría económica<br/>
+          Reporte cerrado en <span id="printBackMonth">Mayo 2026</span>
+        </div>
+      </div>
+    </section>
 
   </main>
 
@@ -2182,11 +2434,31 @@
   }
   function setCurrentMonthLabel() {
     const lbl = getCurrentMonthLabel();
-    ['topbarMonth', 'brandMonth', 'footerMonth', 'printMonth'].forEach(id => {
+    ['topbarMonth', 'brandMonth', 'footerMonth', 'printCoverMonth', 'printBackMonth'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = lbl;
     });
     document.title = `Coyuntura · ${lbl} — Simpleza SA`;
+    updatePrintRunningHeaders(lbl);
+  }
+
+  // CSS @page no admite custom properties en `content`, así que inyectamos una hoja
+  // de estilos con el mes vigente antes de cualquier print para que el header de cada
+  // página impresa diga "Coyuntura · Mayo 2026" en vez de un texto estático.
+  let printHeaderStyleEl = null;
+  function updatePrintRunningHeaders(monthLabel) {
+    if (!printHeaderStyleEl) {
+      printHeaderStyleEl = document.createElement('style');
+      document.head.appendChild(printHeaderStyleEl);
+    }
+    const safe = String(monthLabel).replace(/"/g, '\\"');
+    printHeaderStyleEl.textContent = `
+      @page {
+        @top-right { content: "Simpleza · ${safe}"; }
+      }
+      @page :first { @top-right { content: ""; } }
+      @page back-page { @top-right { content: ""; } }
+    `;
   }
 
   async function apiCall(path, init) {
