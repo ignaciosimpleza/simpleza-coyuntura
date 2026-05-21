@@ -1048,6 +1048,7 @@
     <div class="nav-section-title">Estabilización</div>
     <ul class="sidebar-nav">
       <li><a href="#bandas" data-title="Régimen de Bandas"><span class="dot"></span> Régimen de bandas</a></li>
+      <li><a href="#cotizaciones" data-title="Cotizaciones del Dólar"><span class="dot"></span> Cotizaciones del dólar</a></li>
       <li><a href="#reservas" data-title="Reservas y Tasas BCRA"><span class="dot"></span> Reservas y tasas</a></li>
       <li><a href="#inflacion" data-title="Desinflación / IPC"><span class="dot"></span> Desinflación · IPC</a></li>
       <li><a href="#emision" data-title="Emisión Cero"><span class="dot"></span> Emisión cero</a></li>
@@ -1070,8 +1071,12 @@
     <div class="sidebar-footer">
       Datos en vivo desde<br>
       <strong style="color: var(--verde-menta);">apis.datos.gob.ar</strong>
-      <span style="color: rgba(255,255,255,0.35);"> · </span>
+      <span style="color: rgba(255,255,255,0.35);">·</span>
       <strong style="color: var(--verde-menta);">api.bcra.gob.ar</strong>
+      <span style="color: rgba(255,255,255,0.35);">·</span>
+      <strong style="color: var(--verde-menta);">dolarapi.com</strong>
+      <span style="color: rgba(255,255,255,0.35);">·</span>
+      <strong style="color: var(--verde-menta);">argentinadatos.com</strong>
     </div>
   </aside>
 
@@ -1358,6 +1363,35 @@
     </section>
 
 
+    <!-- ============ MERCADO CAMBIARIO · COTIZACIONES (DolarAPI) ============ -->
+    <section class="section" id="cotizaciones">
+      <div class="section-header">
+        <div class="section-header-text">
+          <div class="section-eyebrow">Estabilización · Mercado cambiario</div>
+          <h2 class="section-title">Cotizaciones del dólar <span class="badge badge-loading" id="badge-dolar">Cargando…</span></h2>
+          <p class="section-lead">Snapshot diario de las principales cotizaciones del dólar y su brecha respecto del mayorista oficial.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Otras cotizaciones del día<small>Compra / venta y brecha (%) calculada contra el mayorista</small></div>
+        </div>
+        <div class="table-wrap">
+          <table id="tabla-cotizaciones">
+            <thead>
+              <tr><th>Tipo</th><th class="num">Compra</th><th class="num">Venta</th><th class="num">Brecha vs Mayorista</th></tr>
+            </thead>
+            <tbody id="cotizaciones-body">
+              <tr><td colspan="4" style="color: var(--gris-medio); font-style: italic;">Cargando cotizaciones…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="source">Fuente: DolarAPI (agrega datos de Ámbito, BCRA y casas de cambio).</div>
+      </div>
+    </section>
+
+
     <!-- ============ RESERVAS y POLÍTICA MONETARIA (BCRA) ============ -->
     <section class="section" id="reservas">
       <div class="section-header">
@@ -1388,6 +1422,11 @@
           <div class="kpi-label">Inflación esperada · <span id="rem-fecha">último REM</span></div>
           <div class="kpi-value" id="rem-valor">—</div>
           <div class="kpi-sub">Próximos 12 meses (REM)</div>
+        </div>
+        <div class="kpi-card info">
+          <div class="kpi-label">Riesgo país · <span id="riesgo-fecha">último</span></div>
+          <div class="kpi-value" id="riesgo-valor">—</div>
+          <div class="kpi-sub">EMBI+ · puntos básicos</div>
         </div>
       </div>
 
@@ -1662,7 +1701,7 @@
       <div class="sources">
         <div><span>Fuentes:</span> INDEC · BCRA · UTDT · The Heritage Foundation · FMI</div>
       </div>
-      <div>Datos en vivo desde <strong>apis.datos.gob.ar</strong> (INDEC) y <strong>api.bcra.gob.ar</strong> (BCRA). Las secciones marcadas con el badge verde <strong>EN VIVO</strong> se actualizan automáticamente cuando la API responde; si falla, se muestran los últimos valores conocidos guardados en caché.</div>
+      <div>Datos en vivo desde <strong>apis.datos.gob.ar</strong> (INDEC), <strong>api.bcra.gob.ar</strong> (BCRA), <strong>dolarapi.com</strong> (cotizaciones del dólar) y <strong>argentinadatos.com</strong> (riesgo país). Las secciones marcadas con el badge verde <strong>EN VIVO</strong> se actualizan automáticamente cuando la API responde; si falla, se muestran los últimos valores conocidos guardados en caché. Cada serie tiene fallback cross-source: el TC mayorista intenta primero BCRA y cae a DolarAPI; el IPC intenta INDEC y cae a BCRA.</div>
       <div style="margin-top: 10px;">© Simpleza SA · Coyuntura Económica Argentina · <span id="footerMonth">Mayo 2026</span></div>
     </footer>
 
@@ -1887,6 +1926,32 @@
       .sort((a, b) => a.fecha.localeCompare(b.fecha));
     apiCache.set(url, normalized);
     return normalized;
+  }
+
+  // === DolarAPI (dolarapi.com) — fallback público para cotizaciones del dólar ===
+  // CORS abierto, sin autenticación. Útil cuando el BCRA falla o como mini-tabla.
+  // Devuelve, por cada `tipo`: { compra, venta, casa, nombre, moneda, fechaActualizacion }.
+  async function fetchDolarApi(tipo) {
+    const url = tipo ? `https://dolarapi.com/v1/dolares/${tipo}` : 'https://dolarapi.com/v1/dolares';
+    if (apiCache.has(url)) return apiCache.get(url);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`DolarAPI HTTP ${res.status}`);
+    const json = await res.json();
+    apiCache.set(url, json);
+    return json;
+  }
+
+  // === ArgentinaDatos (argentinadatos.com) — datos no-oficiales agregados ===
+  // CORS abierto, sin auth. Provee riesgo país, UVA, inflación interanual.
+  const ARG_DATOS_BASE = 'https://argentinadatos.com/v1';
+  async function fetchArgentinaDatos(path) {
+    const url = `${ARG_DATOS_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
+    if (apiCache.has(url)) return apiCache.get(url);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`ArgentinaDatos HTTP ${res.status}`);
+    const json = await res.json();
+    apiCache.set(url, json);
+    return json;
   }
 
   // El badge "EN VIVO" SOLO aparece si el último dato disponible es razonablemente
@@ -2417,14 +2482,38 @@
 
       // Estrategia 2: percent_change. La API devuelve proporciones decimales — convertimos a %.
       if (!monthly) {
-        const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26:percent_change', { limit: 800 });
-        const series = (json.data || []).filter(r => r[1] != null);
-        if (series.length < 13) throw new Error('IPC: pocas observaciones disponibles');
-        monthly = series.map(([d, v]) => ({ date: d, valor: +v * 100 }));
-        // Interanual compuesta sobre los últimos 12 meses
-        const last12 = monthly.slice(-12);
-        const acum = last12.reduce((acc, r) => acc * (1 + r.valor / 100), 1) - 1;
-        yearOverYearPct = acum * 100;
+        try {
+          const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26:percent_change', { limit: 800 });
+          const series = (json.data || []).filter(r => r[1] != null);
+          if (series.length >= 13) {
+            monthly = series.map(([d, v]) => ({ date: d, valor: +v * 100 }));
+            const last12 = monthly.slice(-12);
+            const acum = last12.reduce((acc, r) => acc * (1 + r.valor / 100), 1) - 1;
+            yearOverYearPct = acum * 100;
+          }
+        } catch (e) {
+          console.warn('IPC INDEC percent_change falló, intento BCRA', e);
+        }
+      }
+
+      // Estrategia 3 (fallback cross-source): BCRA IDs 27 (mensual) y 28 (interanual).
+      // El BCRA replica el IPC del INDEC, así que cuando INDEC está caído tenemos un
+      // segundo transporte para el mismo dato oficial.
+      if (!monthly) {
+        const [bMensual, bInteranual] = await Promise.all([
+          fetchBcra(27).catch(() => []),
+          fetchBcra(28).catch(() => [])
+        ]);
+        if (bMensual.length < 13) throw new Error('IPC: todas las fuentes fallaron');
+        monthly = bMensual.map(r => ({ date: r.fecha, valor: r.valor }));
+        if (bInteranual.length) {
+          yearOverYearPct = bInteranual[bInteranual.length - 1].valor;
+        } else {
+          // Si BCRA no devolvió interanual, lo calculamos sobre las observaciones mensuales
+          const last12 = monthly.slice(-12);
+          const acum = last12.reduce((acc, r) => acc * (1 + r.valor / 100), 1) - 1;
+          yearOverYearPct = acum * 100;
+        }
       }
 
       const last36 = monthly.slice(-36);
@@ -2736,28 +2825,49 @@
   }
 
   // TC Mayorista (ID 5) — diaria, $/USD. Reemplaza el KPI hardcoded de Bandas.
+  // TC Mayorista: probamos BCRA primero (serie histórica para calcular variación 30 días),
+  // y si falla caemos a DolarAPI (un único valor "spot"). Una de las dos suele responder.
   async function liveTcMayorista() {
     const badge = document.getElementById('badge-tc');
     try {
-      const series = await fetchBcra(5, { daysBack: 90 });
-      if (series.length === 0) throw new Error('Sin datos');
-      const lastRow = series[series.length - 1];
-      assertFresh(lastRow.fecha, 'TC mayorista');
-      const fechaTxt = formatDayMonth(lastRow.fecha);
-      const valorTxt = fmtMoney(lastRow.valor);
-      // Sub: var. % de los últimos 30 días aprox
-      let varTxt = null;
-      const prior = series[Math.max(0, series.length - 22)];
-      if (prior && prior.valor) {
-        const pct = ((lastRow.valor / prior.valor) - 1) * 100;
-        varTxt = `${pct >= 0 ? '+' : ''}${fmtPct(pct)} vs ${formatDayMonth(prior.fecha)}`;
+      let snapshot = null;
+      try {
+        const series = await fetchBcra(5, { daysBack: 90 });
+        if (series.length === 0) throw new Error('Sin datos BCRA');
+        const lastRow = series[series.length - 1];
+        assertFresh(lastRow.fecha, 'TC mayorista');
+        const fechaTxt = formatDayMonth(lastRow.fecha);
+        const valorTxt = fmtMoney(lastRow.valor);
+        let varTxt = null;
+        const prior = series[Math.max(0, series.length - 22)];
+        if (prior && prior.valor) {
+          const pct = ((lastRow.valor / prior.valor) - 1) * 100;
+          varTxt = `${pct >= 0 ? '+' : ''}${fmtPct(pct)} vs ${formatDayMonth(prior.fecha)}`;
+        }
+        snapshot = { fechaLabel: fechaTxt, valor: valorTxt, varTxt, _lastDate: lastRow.fecha, _source: 'BCRA' };
+      } catch (bcraErr) {
+        console.warn('TC mayorista BCRA falló, intento DolarAPI', bcraErr);
+        const d = await fetchDolarApi('mayorista');
+        if (!d) throw bcraErr;
+        // DolarAPI devuelve { compra, venta, casa, nombre, moneda, fechaActualizacion }
+        const valor = (Number(d.compra) + Number(d.venta)) / 2;
+        const fecha = (d.fechaActualizacion || '').slice(0, 10);
+        if (!fecha || isNaN(valor)) throw new Error('DolarAPI: respuesta inválida');
+        assertFresh(fecha, 'TC mayorista');
+        snapshot = {
+          fechaLabel: formatDayMonth(fecha),
+          valor: fmtMoney(valor),
+          varTxt: 'vía DolarAPI',
+          _lastDate: fecha,
+          _source: 'DolarAPI'
+        };
       }
-      currentSnapshot.tcMayorista = { fechaLabel: fechaTxt, valor: valorTxt, varTxt };
-      applyTcMayoristaData(currentSnapshot.tcMayorista);
-      cacheLastKnown('tcMayorista', currentSnapshot.tcMayorista);
-      setBadgeLive(badge, lastRow.fecha);
+      currentSnapshot.tcMayorista = snapshot;
+      applyTcMayoristaData(snapshot);
+      cacheLastKnown('tcMayorista', snapshot);
+      setBadgeLive(badge, snapshot._lastDate);
     } catch (e) {
-      console.warn('TC Mayorista BCRA falló', e);
+      console.warn('TC Mayorista: BCRA y DolarAPI ambos fallaron', e);
       if (!restoreFromCache('tcMayorista', 'badge-tc', applyTcMayoristaData)) {
         setBadgeFromError(badge, e);
       }
@@ -2784,10 +2894,101 @@
     }
   }
 
-  // Coordinador: corre las 3 series del bloque "Reservas y Tasas" y maneja un único badge.
+  // Riesgo país (EMBI+) vía ArgentinaDatos. Endpoint /ultimo devuelve { fecha, valor }.
+  function applyRiesgoData(d) {
+    if (!d) return;
+    setText('riesgo-fecha', d.fechaLabel);
+    setText('riesgo-valor', d.valor);
+  }
+  async function liveRiesgoPais() {
+    try {
+      const json = await fetchArgentinaDatos('/finanzas/indices/riesgo-pais/ultimo');
+      const fecha = json.fecha || json.date;
+      const valor = +(json.valor ?? json.value);
+      if (!fecha || isNaN(valor)) throw new Error('ArgentinaDatos: respuesta inválida');
+      assertFresh(fecha, 'Riesgo país');
+      const snapshot = { fechaLabel: formatDayMonth(fecha), valor: Math.round(valor).toLocaleString('es-AR') + ' pb' };
+      currentSnapshot.riesgo = snapshot;
+      applyRiesgoData(snapshot);
+      cacheLastKnown('riesgo', snapshot);
+      return { ok: true, lastDate: fecha };
+    } catch (e) {
+      console.warn('Riesgo país ArgentinaDatos falló', e);
+      const cached = getLastKnown('riesgo');
+      if (cached) { applyRiesgoData(cached.data); currentSnapshot.riesgo = cached.data; }
+      return { ok: false, error: e };
+    }
+  }
+
+  // Cotizaciones del dólar (oficial, blue, MEP, CCL, cripto, tarjeta) vía DolarAPI.
+  // Pinta una tabla compacta con compra, venta y brecha vs. mayorista.
+  const COTIZ_TIPOS = ['oficial', 'blue', 'bolsa', 'contadoconliqui', 'tarjeta', 'cripto'];
+  const COTIZ_NOMBRES = {
+    oficial: 'Oficial',
+    blue: 'Blue',
+    bolsa: 'MEP',
+    contadoconliqui: 'CCL',
+    tarjeta: 'Tarjeta',
+    cripto: 'Cripto'
+  };
+  function applyCotizacionesData(d) {
+    if (!d || !Array.isArray(d.filas)) return;
+    const tbody = document.getElementById('cotizaciones-body');
+    if (!tbody) return;
+    tbody.innerHTML = d.filas.map(f => `
+      <tr>
+        <td><strong>${escapeHtml(f.nombre)}</strong></td>
+        <td class="num">${escapeHtml(f.compra)}</td>
+        <td class="num">${escapeHtml(f.venta)}</td>
+        <td class="num">${escapeHtml(f.brecha)}</td>
+      </tr>
+    `).join('');
+  }
+  async function liveCotizaciones() {
+    const badge = document.getElementById('badge-dolar');
+    try {
+      const all = await fetchDolarApi();
+      if (!Array.isArray(all)) throw new Error('DolarAPI: respuesta inválida');
+      const mayorista = all.find(c => c.casa === 'mayorista');
+      const baseVenta = mayorista ? Number(mayorista.venta) : null;
+      const filas = COTIZ_TIPOS
+        .map(tipo => {
+          const c = all.find(x => x.casa === tipo);
+          if (!c) return null;
+          const compra = Number(c.compra);
+          const venta = Number(c.venta);
+          let brecha = '—';
+          if (baseVenta && !isNaN(venta)) {
+            const pct = ((venta / baseVenta) - 1) * 100;
+            brecha = (pct >= 0 ? '+' : '') + fmtPct(pct);
+          }
+          return {
+            nombre: COTIZ_NOMBRES[tipo] || tipo,
+            compra: isNaN(compra) ? '—' : fmtMoney(compra),
+            venta: isNaN(venta) ? '—' : fmtMoney(venta),
+            brecha
+          };
+        })
+        .filter(Boolean);
+      if (filas.length === 0) throw new Error('Sin cotizaciones disponibles');
+      const lastDate = (all[0]?.fechaActualizacion || '').slice(0, 10);
+      const snapshot = { filas, fechaLabel: formatDayMonth(lastDate) };
+      currentSnapshot.cotizaciones = snapshot;
+      applyCotizacionesData(snapshot);
+      cacheLastKnown('cotizaciones', snapshot);
+      setBadgeLive(badge, lastDate);
+    } catch (e) {
+      console.warn('Cotizaciones DolarAPI falló', e);
+      if (!restoreFromCache('cotizaciones', 'badge-dolar', applyCotizacionesData)) {
+        setBadgeFromError(badge, e);
+      }
+    }
+  }
+
+  // Coordinador: corre las 4 series del bloque "Reservas y Tasas" y maneja un único badge.
   async function liveBcraBloque() {
     const badge = document.getElementById('badge-bcra');
-    const results = await Promise.all([liveReservas(), liveTpmBadlar(), liveRem()]);
+    const results = await Promise.all([liveReservas(), liveTpmBadlar(), liveRem(), liveRiesgoPais()]);
     const anyOk = results.some(r => r && r.ok);
     const dates = results.filter(r => r && r.ok && r.lastDate).map(r => r.lastDate).sort();
     const oldest = dates[0];
@@ -2796,7 +2997,7 @@
     } else {
       // Si todas las series fallaron pero hay cache, mostramos "Última actualización"
       // (el restore individual ya repobló los KPIs dentro de cada live function).
-      const anyCached = ['reservas', 'tasas', 'rem'].map(k => getLastKnown(k)).find(c => c);
+      const anyCached = ['reservas', 'tasas', 'rem', 'riesgo'].map(k => getLastKnown(k)).find(c => c);
       if (anyCached) {
         setBadgeStale(badge, anyCached.savedAt);
       } else {
@@ -3183,10 +3384,12 @@
     if (d.reservas)    applyReservasData(d.reservas);
     if (d.tasas)       applyTasasData(d.tasas);
     if (d.rem)         applyRemData(d.rem);
-    if (d.reservas || d.tasas || d.rem) {
-      setSnapshotBadge('badge-bcra', d.reservas?.fechaLabel || d.tasas?.tpmFecha || d.rem?.fechaLabel);
+    if (d.riesgo)      applyRiesgoData(d.riesgo);
+    if (d.reservas || d.tasas || d.rem || d.riesgo) {
+      setSnapshotBadge('badge-bcra', d.reservas?.fechaLabel || d.tasas?.tpmFecha || d.rem?.fechaLabel || d.riesgo?.fechaLabel);
     }
-    if (d.tcMayorista) { applyTcMayoristaData(d.tcMayorista); setSnapshotBadge('badge-tc', d.tcMayorista.fechaLabel); }
+    if (d.tcMayorista)   { applyTcMayoristaData(d.tcMayorista); setSnapshotBadge('badge-tc', d.tcMayorista.fechaLabel); }
+    if (d.cotizaciones)  { applyCotizacionesData(d.cotizaciones); setSnapshotBadge('badge-dolar', d.cotizaciones.fechaLabel); }
     document.querySelectorAll('.section.is-live').forEach(s => s.classList.remove('is-live'));
   }
 
@@ -3237,7 +3440,8 @@
       liveEmae(),
       liveSalario(),
       liveTcMayorista(),
-      liveBcraBloque()
+      liveBcraBloque(),
+      liveCotizaciones()
     ]);
   }
 
