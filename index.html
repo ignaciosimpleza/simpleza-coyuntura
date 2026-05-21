@@ -650,7 +650,7 @@
         letter-spacing: 0.6px;
       }
       @top-right {
-        content: "Simpleza SA";
+        content: "Simpleza · __PRINT_MONTH__";
         font-family: 'Sora', sans-serif;
         font-size: 8pt;
         font-weight: 600;
@@ -675,14 +675,14 @@
         color: #6C868C;
       }
     }
-    /* Portada y contraportada: sin header / footer impreso */
+    /* Portada y contraportada: suprimir el header/footer impreso, pero mantener los márgenes
+       de @page (no usamos margin: 0 porque algunos motores de impresión los ignoran y dejan
+       el contenido en la mitad del ancho de la página). */
     @page :first {
-      margin: 0;
       @top-left { content: ""; } @top-right { content: ""; }
       @bottom-left { content: ""; } @bottom-right { content: ""; } @bottom-center { content: ""; }
     }
     @page back-page {
-      margin: 0;
       @top-left { content: ""; } @top-right { content: ""; }
       @bottom-left { content: ""; } @bottom-right { content: ""; } @bottom-center { content: ""; }
     }
@@ -698,14 +698,15 @@
 
       .main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
 
-      /* === PORTADA (página 1) === */
+      /* === PORTADA (página 1) ===
+         Width 100% para que llene el área de impresión sin importar los márgenes del driver.
+         min-height genera una página entera incluso si el contenido es corto. */
       .print-only { display: block; }
       .print-cover {
         page-break-after: always;
         break-after: page;
-        height: 297mm;
-        width: 210mm;
-        padding: 22mm 24mm 20mm;
+        width: 100%;
+        min-height: 245mm;
         box-sizing: border-box;
         background: linear-gradient(155deg, #fff 0%, #fff 55%, #f6efe2 100%) !important;
         display: flex !important;
@@ -716,18 +717,19 @@
       .print-cover::after {
         content: '';
         position: absolute;
-        top: -80mm; right: -80mm;
-        width: 220mm; height: 220mm;
+        top: -10%; right: -25%;
+        width: 95%; aspect-ratio: 1;
         border-radius: 50%;
         background: radial-gradient(circle, rgba(50, 232, 169, 0.18) 0%, transparent 65%);
+        pointer-events: none;
       }
-      .print-cover-top { display: flex; align-items: center; }
+      .print-cover-top { display: flex; align-items: center; padding-bottom: 4mm; }
       .print-cover-logo {
         max-height: 56px;
         max-width: 200px;
         filter: invert(1) brightness(0.16);
       }
-      .print-cover-body { flex: 1; display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 1; }
+      .print-cover-body { flex: 1; display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 1; padding: 14mm 0; }
       .print-cover-rule { width: 60px; height: 3px; background: var(--verde-menta); margin-bottom: 14px; }
       .print-cover-eyebrow {
         font-size: 9pt;
@@ -738,29 +740,29 @@
         margin-bottom: 18px;
       }
       .print-cover-title {
-        font-size: 50pt;
+        font-size: 46pt;
         font-weight: 800;
         line-height: 0.98;
-        letter-spacing: -1.8px;
+        letter-spacing: -1.6px;
         color: #1a2426;
-        margin: 0 0 22px;
+        margin: 0 0 18px;
       }
       .print-cover-subtitle {
-        font-size: 14pt;
+        font-size: 13pt;
         font-weight: 400;
         color: #6C868C;
         line-height: 1.35;
-        max-width: 130mm;
+        max-width: 80%;
         margin: 0;
       }
       .print-cover-accent {
-        width: 100mm; height: 4px; background: var(--verde-menta);
-        margin-top: 30mm;
+        width: 50%; height: 4px; background: var(--verde-menta);
+        margin-top: 18mm;
       }
       .print-cover-footer {
         display: flex; justify-content: space-between; align-items: flex-end;
         font-size: 9pt; color: #4d4d4d; line-height: 1.5;
-        border-top: 1px solid #d4d4d4; padding-top: 12px;
+        border-top: 1px solid #d4d4d4; padding-top: 10px;
         position: relative; z-index: 1;
       }
       .print-cover-footer strong { color: #1a2426; font-weight: 700; }
@@ -794,48 +796,75 @@
       }
 
       .section {
-        margin-bottom: 18px !important;
+        margin-bottom: 14px !important;
         page-break-inside: auto;
         break-inside: auto;
       }
-      .section-header { margin-bottom: 12px !important; page-break-after: avoid; break-after: avoid; }
-      .section-title { font-size: 15pt !important; margin-bottom: 6px !important; letter-spacing: -0.2px !important; }
-      .section-eyebrow { font-size: 8.5pt !important; }
-      .section-lead { font-size: 9.5pt !important; }
+      .section-header { margin-bottom: 8px !important; page-break-after: avoid; break-after: avoid; }
+      .section-title { font-size: 15pt !important; margin-bottom: 4px !important; letter-spacing: -0.2px !important; }
+      .section-eyebrow { font-size: 8.5pt !important; margin-bottom: 3px !important; }
+      .section-lead { font-size: 9.5pt !important; margin-bottom: 0 !important; }
 
-      /* No partir cards, kpi-grids, tablas o gráficos a la mitad */
-      .card, .kpi-grid, .kpi-card, table, .chart-wrap {
+      /* Bloquear roturas dentro de elementos atómicos (charts, tablas, KPI grid, KPI cards)
+         pero NO dentro de las cards: que la card se pueda partir si su chart no entra,
+         evitando los huecos blancos al fondo de página. */
+      .kpi-grid, .kpi-card, table, .chart-wrap {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
+      .card {
+        page-break-inside: auto !important;
+        break-inside: auto !important;
+      }
 
-      .kpi-grid { gap: 8px !important; margin-bottom: 12px !important; }
-      .kpi-card { padding: 10px 14px !important; }
+      .kpi-grid {
+        gap: 6px !important;
+        margin-bottom: 8px !important;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+      }
+      .kpi-card { padding: 8px 12px !important; }
       .kpi-card.accent { border-left-width: 3px !important; }
-      .kpi-label { font-size: 7.5pt !important; letter-spacing: 0.9px !important; }
-      .kpi-value { font-size: 16pt !important; }
-      .kpi-value.small { font-size: 11pt !important; }
-      .kpi-sub, .kpi-delta { font-size: 8pt !important; }
+      .kpi-label { font-size: 7pt !important; letter-spacing: 0.8px !important; margin-bottom: 4px !important; }
+      .kpi-value { font-size: 15pt !important; line-height: 1.05 !important; }
+      .kpi-value.small { font-size: 10pt !important; }
+      .kpi-sub, .kpi-delta { font-size: 7.5pt !important; margin-top: 3px !important; }
 
-      .card { padding: 12px 14px !important; border: 1px solid #e0e0e0 !important; box-shadow: none !important; margin-bottom: 8px !important; }
-      .card-title { font-size: 10pt !important; font-weight: 700 !important; }
-      .card-title small { font-size: 8.5pt !important; font-weight: 400 !important; }
+      .card { padding: 10px 12px !important; border: 1px solid #e0e0e0 !important; box-shadow: none !important; margin-bottom: 6px !important; }
+      .card-header {
+        margin-bottom: 6px !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+      .card-title { font-size: 9.5pt !important; font-weight: 700 !important; }
+      .card-title small { font-size: 8pt !important; font-weight: 400 !important; }
 
-      .chart-wrap { height: 8cm !important; }
-      .chart-wrap.tall { height: 9cm !important; }
-      .chart-wrap.short { height: 6cm !important; }
+      /* Charts más chicos para que un sección entera entre por página. La altura efectiva
+         máxima del area de impresión en A4 con márgenes default es ~250mm; con header (15mm)
+         + KPI grid (25mm) + chart card (≈70mm) sobra para meter una sección extra al lado. */
+      .chart-wrap { height: 5.6cm !important; }
+      .chart-wrap.tall { height: 6.4cm !important; }
+      .chart-wrap.short { height: 4.4cm !important; }
 
-      table { font-size: 8pt !important; }
-      th { font-size: 7pt !important; padding: 5px 7px !important; background: #f0e6d6 !important; letter-spacing: 0.4px !important; }
-      td { padding: 3px 7px !important; }
+      table { font-size: 7.5pt !important; }
+      th { font-size: 6.5pt !important; padding: 4px 6px !important; background: #f0e6d6 !important; letter-spacing: 0.3px !important; }
+      td { padding: 2.5px 6px !important; }
 
-      .source { font-size: 7.5pt !important; font-style: italic !important; color: #888 !important; }
+      .source { font-size: 7pt !important; font-style: italic !important; color: #888 !important; margin-top: 4px !important; }
       .source::before { content: '' !important; }
       .badge { display: none !important; }
       .section.is-live .card { border-color: #e0e0e0 !important; box-shadow: none !important; }
       .section.is-live .source { color: #888 !important; font-weight: 400 !important; }
 
-      .two-col { gap: 10px !important; }
+      /* Forzar dos columnas reales en print (sin esto, el responsive @media (max-width: 1024px)
+         se activa porque la página A4 mide ~794px y stackea verticalmente, dejando huecos). */
+      .two-col {
+        display: grid !important;
+        grid-template-columns: 1.5fr 1fr !important;
+        gap: 8px !important;
+      }
+      .two-col.even {
+        grid-template-columns: 1fr 1fr !important;
+      }
 
       footer { font-size: 8pt !important; margin-top: 18px !important; padding-top: 10px !important; border-top: 1px solid #e0e0e0 !important; color: #888 !important; }
       footer strong { color: #4d4d4d !important; }
@@ -845,9 +874,8 @@
         page-break-before: always;
         break-before: page;
         page: back-page;
-        height: 297mm;
-        width: 210mm;
-        padding: 30mm 26mm;
+        width: 100%;
+        min-height: 245mm;
         box-sizing: border-box;
         position: relative;
         background: #fff;
@@ -1692,15 +1720,19 @@
   /* ============================================================
    * CHART.JS DEFAULTS
    * ============================================================ */
-  Chart.defaults.font.family = "'Sora', sans-serif";
-  Chart.defaults.font.size = 11;
-  Chart.defaults.color = C.gris;
-  Chart.defaults.borderColor = '#ECE3D6';
-  Chart.defaults.plugins.legend.labels.boxWidth = 10;
-  Chart.defaults.plugins.legend.labels.boxHeight = 10;
-  Chart.defaults.plugins.legend.labels.padding = 14;
-  // DPI mayor para que los charts no salgan pixelados al exportar a PDF
-  Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+  // Chart.defaults se setean sólo si la librería cargó. Si Chart.js falla
+  // (red lenta, CDN bloqueado, etc.) el resto del reporte sigue funcionando.
+  if (typeof Chart !== 'undefined') {
+    Chart.defaults.font.family = "'Sora', sans-serif";
+    Chart.defaults.font.size = 11;
+    Chart.defaults.color = C.gris;
+    Chart.defaults.borderColor = '#ECE3D6';
+    Chart.defaults.plugins.legend.labels.boxWidth = 10;
+    Chart.defaults.plugins.legend.labels.boxHeight = 10;
+    Chart.defaults.plugins.legend.labels.padding = 14;
+    // DPI mayor para que los charts no salgan pixelados al exportar a PDF
+    Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+  }
 
   function commonScaleOpts() {
     return {
@@ -2442,23 +2474,20 @@
     updatePrintRunningHeaders(lbl);
   }
 
-  // CSS @page no admite custom properties en `content`, así que inyectamos una hoja
-  // de estilos con el mes vigente antes de cualquier print para que el header de cada
-  // página impresa diga "Coyuntura · Mayo 2026" en vez de un texto estático.
-  let printHeaderStyleEl = null;
+  // El @top-right de las páginas de contenido es estático en el CSS pero contiene
+  // el placeholder __PRINT_MONTH__. Lo reemplazamos por el mes vigente al iniciar.
+  // (Chrome ignora las @page rules inyectadas dinámicamente con createElement, pero sí
+  // re-parsea si modificamos el textContent de un <style> existente).
+  let printHeadersDone = false;
   function updatePrintRunningHeaders(monthLabel) {
-    if (!printHeaderStyleEl) {
-      printHeaderStyleEl = document.createElement('style');
-      document.head.appendChild(printHeaderStyleEl);
-    }
+    if (printHeadersDone) return;
     const safe = String(monthLabel).replace(/"/g, '\\"');
-    printHeaderStyleEl.textContent = `
-      @page {
-        @top-right { content: "Simpleza · ${safe}"; }
+    document.querySelectorAll('style').forEach(s => {
+      if (s.textContent.includes('__PRINT_MONTH__')) {
+        s.textContent = s.textContent.replaceAll('__PRINT_MONTH__', safe);
+        printHeadersDone = true;
       }
-      @page :first { @top-right { content: ""; } }
-      @page back-page { @top-right { content: ""; } }
-    `;
+    });
   }
 
   async function apiCall(path, init) {
@@ -2757,29 +2786,38 @@
    * BOOT
    * ============================================================ */
   document.addEventListener('DOMContentLoaded', () => {
-    // Render static charts immediately
-    renderLibertadArg();
-    renderLibertadCmp();
-    renderIcgSerie();
-    renderIcgZona();
-    renderIccZona();
-    renderBandas();
-    renderEmision();
-    renderBase();
+    // Etiquetas de mes / título / placeholder en el @page header se aplican primero
+    // y aisladamente: si Chart.js falla en cargar (red lenta, CDN caído, etc.) no
+    // queremos que el header impreso quede con "__PRINT_MONTH__" colgado.
+    try { setCurrentMonthLabel(); } catch (e) { console.error('setCurrentMonthLabel falló', e); }
+    try { initNav(); } catch (e) { console.error('initNav falló', e); }
+    try { wireRefreshButton(); } catch (e) { console.error('wireRefreshButton falló', e); }
+    try { wirePdfButton(); } catch (e) { console.error('wirePdfButton falló', e); }
+    try { wireReportsUI(); } catch (e) { console.error('wireReportsUI falló', e); }
 
-    // Initial render with fallback for live ones (in case API is slow)
-    renderIpc(FALLBACK.ipc.labels, FALLBACK.ipc.values, false);
-    renderEmae(FALLBACK.emae.labels, FALLBACK.emae.values, FALLBACK.emae.varMensual, false);
-    renderSalario(FALLBACK.salario.labels, FALLBACK.salario.indice, FALLBACK.salario.varAnual, false);
+    // Charts (depende de que Chart.js esté cargado; si falla, el resto sigue funcionando)
+    if (typeof Chart !== 'undefined') {
+      try {
+        renderLibertadArg();
+        renderLibertadCmp();
+        renderIcgSerie();
+        renderIcgZona();
+        renderIccZona();
+        renderBandas();
+        renderEmision();
+        renderBase();
+        renderIpc(FALLBACK.ipc.labels, FALLBACK.ipc.values, false);
+        renderEmae(FALLBACK.emae.labels, FALLBACK.emae.values, FALLBACK.emae.varMensual, false);
+        renderSalario(FALLBACK.salario.labels, FALLBACK.salario.indice, FALLBACK.salario.varAnual, false);
+      } catch (e) {
+        console.error('render charts falló', e);
+      }
+    } else {
+      console.warn('Chart.js no cargó — los gráficos no se mostrarán pero el resto del reporte sí.');
+    }
 
-    initNav();
-    setCurrentMonthLabel();
-    wireRefreshButton();
-    wirePdfButton();
-    wireReportsUI();
-
-    // Fetch live data in parallel
-    fetchAllLive();
+    // Fetch live data en paralelo (con su propio try/catch interno)
+    fetchAllLive().catch(e => console.error('fetchAllLive falló', e));
   });
   </script>
 </body>
