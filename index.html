@@ -1048,6 +1048,7 @@
     <div class="nav-section-title">Estabilización</div>
     <ul class="sidebar-nav">
       <li><a href="#bandas" data-title="Régimen de Bandas"><span class="dot"></span> Régimen de bandas</a></li>
+      <li><a href="#reservas" data-title="Reservas y Tasas BCRA"><span class="dot"></span> Reservas y tasas</a></li>
       <li><a href="#inflacion" data-title="Desinflación / IPC"><span class="dot"></span> Desinflación · IPC</a></li>
       <li><a href="#emision" data-title="Emisión Cero"><span class="dot"></span> Emisión cero</a></li>
       <li><a href="#base" data-title="Base Monetaria"><span class="dot"></span> Base monetaria</a></li>
@@ -1317,16 +1318,16 @@
       <div class="section-header">
         <div class="section-header-text">
           <div class="section-eyebrow">Estabilización · Cambiario</div>
-          <h2 class="section-title">Nuevo Régimen de Bandas <span class="badge badge-static">Diario · BCRA</span></h2>
+          <h2 class="section-title">Nuevo Régimen de Bandas <span class="badge badge-loading" id="badge-tc">Cargando…</span></h2>
           <p class="section-lead">Desde el 1/01/26 las bandas de flotación se ajustan por IPC T-2. El tipo de cambio se mantuvo relativamente estable en torno a 1.400 $/USD.</p>
         </div>
       </div>
 
       <div class="kpi-grid">
         <div class="kpi-card accent">
-          <div class="kpi-label">TC mayorista</div>
-          <div class="kpi-value">$1.400</div>
-          <div class="kpi-sub">Estable +60 días</div>
+          <div class="kpi-label">TC mayorista · <span id="tc-fecha">último</span></div>
+          <div class="kpi-value" id="tc-valor">$1.400</div>
+          <div class="kpi-sub" id="tc-sub">Estable +60 días</div>
         </div>
         <div class="kpi-card info">
           <div class="kpi-label">Banda inferior</div>
@@ -1351,6 +1352,58 @@
         </div>
         <div class="chart-wrap tall"><canvas id="chart-bandas"></canvas></div>
         <div class="source">Fuente: Simpleza SA sobre la base de BCRA.</div>
+      </div>
+    </section>
+
+
+    <!-- ============ RESERVAS y POLÍTICA MONETARIA (BCRA) ============ -->
+    <section class="section" id="reservas">
+      <div class="section-header">
+        <div class="section-header-text">
+          <div class="section-eyebrow">Estabilización · BCRA</div>
+          <h2 class="section-title">Reservas y tasas <span class="badge badge-loading" id="badge-bcra">Cargando…</span></h2>
+          <p class="section-lead">Stock de reservas internacionales y nivel de tasas de referencia, junto con la inflación esperada según el Relevamiento de Expectativas de Mercado (REM).</p>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card accent">
+          <div class="kpi-label">Reservas · <span id="reservas-fecha">último</span></div>
+          <div class="kpi-value" id="reservas-valor">—</div>
+          <div class="kpi-sub" id="reservas-sub">Millones de USD</div>
+        </div>
+        <div class="kpi-card info">
+          <div class="kpi-label">TPM · <span id="tpm-fecha">último</span></div>
+          <div class="kpi-value" id="tpm-valor">—</div>
+          <div class="kpi-sub">Tasa de Política Monetaria (% n.a.)</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">BADLAR · <span id="badlar-fecha">último</span></div>
+          <div class="kpi-value" id="badlar-valor">—</div>
+          <div class="kpi-sub">Bancos privados (% n.a.)</div>
+        </div>
+        <div class="kpi-card warn">
+          <div class="kpi-label">Inflación esperada · <span id="rem-fecha">último REM</span></div>
+          <div class="kpi-value" id="rem-valor">—</div>
+          <div class="kpi-sub">Próximos 12 meses (REM)</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Reservas Internacionales<small>Stock diario, últimos 12 meses · USD M</small></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-reservas"></canvas></div>
+          <div class="source">Fuente: BCRA — Estadísticas Monetarias v3.0 (ID 1).</div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Tasas de referencia<small>TPM y BADLAR · % n.a., últimos 12 meses</small></div>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-tasas"></canvas></div>
+          <div class="source">Fuente: BCRA — IDs 6 (TPM) y 7 (BADLAR).</div>
+        </div>
       </div>
     </section>
 
@@ -1799,6 +1852,39 @@
     const json = await res.json();
     apiCache.set(url, json);
     return json;
+  }
+
+  // === BCRA Estadísticas Monetarias v3.0 ===
+  // Endpoint público sin autenticación: api.bcra.gob.ar/estadisticas/v3.0/monetarias/{idVariable}
+  // IDs útiles: 1 Reservas, 5 TC Mayorista, 6 Tasa de Política Monetaria, 7 BADLAR, 29 Inflación REM 12m.
+  const BCRA_BASE = 'https://api.bcra.gob.ar/estadisticas/v3.0/monetarias';
+  async function fetchBcra(idVariable, opts = {}) {
+    // Si daysBack está seteado, pedimos solo los últimos N días; sin él, pedimos toda la serie.
+    const params = new URLSearchParams();
+    if (opts.daysBack) {
+      const hasta = new Date();
+      const desde = new Date(); desde.setDate(desde.getDate() - opts.daysBack);
+      const iso = d => d.toISOString().slice(0, 10);
+      params.set('desde', iso(desde));
+      params.set('hasta', iso(hasta));
+    }
+    const qs = params.toString();
+    const url = `${BCRA_BASE}/${idVariable}${qs ? '?' + qs : ''}`;
+    if (apiCache.has(url)) return apiCache.get(url);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`BCRA HTTP ${res.status}`);
+    const json = await res.json();
+    // Respuesta esperada: { status, results: [{ idVariable, fecha, valor, ... }, ...] } en ASC.
+    // Si viene en otro formato (versiones distintas), normalizamos.
+    const results = Array.isArray(json.results) ? json.results
+                  : Array.isArray(json.data) ? json.data
+                  : Array.isArray(json) ? json : [];
+    const normalized = results
+      .map(r => ({ fecha: r.fecha || r.date, valor: +(r.valor ?? r.value) }))
+      .filter(r => r.fecha && !isNaN(r.valor))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
+    apiCache.set(url, normalized);
+    return normalized;
   }
 
   // El badge "EN VIVO" SOLO aparece si el último dato disponible es razonablemente
@@ -2456,6 +2542,219 @@
   }
 
   /* ============================================================
+   * BCRA: Reservas, TC Mayorista, TPM, BADLAR, REM
+   * ============================================================ */
+
+  // Helpers para charts simples del BCRA
+  let reservasChart = null;
+  function renderReservas(labels, values, isLive) {
+    const ctx = document.getElementById('chart-reservas');
+    if (!ctx || typeof Chart === 'undefined') return;
+    if (reservasChart) reservasChart.destroy();
+    reservasChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Reservas (USD M)',
+          data: values,
+          borderColor: C.azul,
+          backgroundColor: 'rgba(108, 134, 140, 0.10)',
+          borderWidth: 2.2,
+          tension: 0.25,
+          pointRadius: 0,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 60, autoSkip: true, autoSkipPadding: 14 } },
+          y: { grid: { color: '#F0E6D6' }, ticks: { callback: v => 'US$ ' + (v / 1000).toFixed(1) + 'k' } }
+        }
+      }
+    });
+  }
+
+  let tasasChart = null;
+  function renderTasas(labels, tpm, badlar) {
+    const ctx = document.getElementById('chart-tasas');
+    if (!ctx || typeof Chart === 'undefined') return;
+    if (tasasChart) tasasChart.destroy();
+    tasasChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'TPM', data: tpm, borderColor: C.verde, borderWidth: 2.4, tension: 0.2, pointRadius: 0, fill: false },
+          { label: 'BADLAR', data: badlar, borderColor: C.terracota, borderWidth: 2.4, tension: 0.2, pointRadius: 0, fill: false }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 60, autoSkip: true, autoSkipPadding: 14 } },
+          y: { grid: { color: '#F0E6D6' }, ticks: { callback: v => v + '%' } }
+        }
+      }
+    });
+  }
+
+  function fmtMoney(v) {
+    if (v == null || isNaN(v)) return '—';
+    return '$' + Math.round(v).toLocaleString('es-AR');
+  }
+  function fmtUsdK(v) {
+    if (v == null || isNaN(v)) return '—';
+    return 'US$ ' + (v / 1000).toFixed(1) + ' mil M';
+  }
+
+  // Reservas Internacionales (ID 1) — diaria, USD millones
+  async function liveReservas(sharedBadge) {
+    try {
+      const series = await fetchBcra(1, { daysBack: 380 });
+      if (series.length === 0) throw new Error('Sin datos');
+      const last = series.slice(-260);   // últimos ~12 meses laborables
+      const labels = last.map(r => formatDayMonth(r.fecha));
+      const values = last.map(r => r.valor);
+      const lastRow = series[series.length - 1];
+      assertFresh(lastRow.fecha, 'Reservas');
+      renderReservas(labels, values, true);
+      document.getElementById('reservas-fecha').textContent = formatDayMonth(lastRow.fecha);
+      document.getElementById('reservas-valor').textContent = fmtUsdK(lastRow.valor);
+      currentSnapshot.reservas = { labels, values, fechaLabel: formatDayMonth(lastRow.fecha), valor: fmtUsdK(lastRow.valor) };
+      return { ok: true, lastDate: lastRow.fecha };
+    } catch (e) {
+      console.warn('Reservas BCRA falló', e);
+      return { ok: false, error: e };
+    }
+  }
+
+  // TPM (ID 6) + BADLAR (ID 7) — series diarias, dibujadas juntas
+  async function liveTpmBadlar() {
+    try {
+      const [tpmSeries, badlarSeries] = await Promise.all([
+        fetchBcra(6, { daysBack: 380 }),
+        fetchBcra(7, { daysBack: 380 })
+      ]);
+      if (!tpmSeries.length && !badlarSeries.length) throw new Error('Sin datos');
+
+      // Alinear por fecha (union de fechas, valores nulos donde no haya dato)
+      const byDate = new Map();
+      tpmSeries.forEach(r => byDate.set(r.fecha, { tpm: r.valor, badlar: null }));
+      badlarSeries.forEach(r => {
+        if (byDate.has(r.fecha)) byDate.get(r.fecha).badlar = r.valor;
+        else byDate.set(r.fecha, { tpm: null, badlar: r.valor });
+      });
+      const merged = Array.from(byDate.entries())
+        .map(([fecha, v]) => ({ fecha, ...v }))
+        .sort((a, b) => a.fecha.localeCompare(b.fecha))
+        .slice(-260);
+      const labels = merged.map(r => formatDayMonth(r.fecha));
+      const tpm = merged.map(r => r.tpm);
+      const badlar = merged.map(r => r.badlar);
+      renderTasas(labels, tpm, badlar);
+
+      const lastTpm = tpmSeries[tpmSeries.length - 1];
+      const lastBadlar = badlarSeries[badlarSeries.length - 1];
+      if (lastTpm) {
+        document.getElementById('tpm-fecha').textContent = formatDayMonth(lastTpm.fecha);
+        document.getElementById('tpm-valor').textContent = fmtPct(lastTpm.valor);
+      }
+      if (lastBadlar) {
+        document.getElementById('badlar-fecha').textContent = formatDayMonth(lastBadlar.fecha);
+        document.getElementById('badlar-valor').textContent = fmtPct(lastBadlar.valor);
+      }
+      currentSnapshot.tasas = {
+        labels, tpm, badlar,
+        tpmFecha: lastTpm ? formatDayMonth(lastTpm.fecha) : null,
+        tpmValor: lastTpm ? fmtPct(lastTpm.valor) : null,
+        badlarFecha: lastBadlar ? formatDayMonth(lastBadlar.fecha) : null,
+        badlarValor: lastBadlar ? fmtPct(lastBadlar.valor) : null
+      };
+      const lastDate = (lastTpm?.fecha || lastBadlar?.fecha);
+      assertFresh(lastDate, 'TPM/BADLAR');
+      return { ok: true, lastDate };
+    } catch (e) {
+      console.warn('TPM/BADLAR BCRA falló', e);
+      return { ok: false, error: e };
+    }
+  }
+
+  // TC Mayorista (ID 5) — diaria, $/USD. Reemplaza el KPI hardcoded de Bandas.
+  async function liveTcMayorista() {
+    const badge = document.getElementById('badge-tc');
+    try {
+      const series = await fetchBcra(5, { daysBack: 90 });
+      if (series.length === 0) throw new Error('Sin datos');
+      const lastRow = series[series.length - 1];
+      assertFresh(lastRow.fecha, 'TC mayorista');
+      document.getElementById('tc-fecha').textContent = formatDayMonth(lastRow.fecha);
+      document.getElementById('tc-valor').textContent = fmtMoney(lastRow.valor);
+      // Sub: var. % de los últimos 30 días aprox
+      const prior = series[Math.max(0, series.length - 22)];
+      if (prior && prior.valor) {
+        const pct = ((lastRow.valor / prior.valor) - 1) * 100;
+        document.getElementById('tc-sub').textContent =
+          `${pct >= 0 ? '+' : ''}${fmtPct(pct)} vs ${formatDayMonth(prior.fecha)}`;
+      }
+      currentSnapshot.tcMayorista = { fechaLabel: formatDayMonth(lastRow.fecha), valor: fmtMoney(lastRow.valor) };
+      setBadgeLive(badge, lastRow.fecha);
+    } catch (e) {
+      console.warn('TC Mayorista BCRA falló', e);
+      setBadgeFromError(badge, e);
+    }
+  }
+
+  // Inflación esperada REM próximos 12 meses (ID 29) — mensual, %
+  async function liveRem() {
+    try {
+      const series = await fetchBcra(29);
+      if (series.length === 0) throw new Error('Sin datos');
+      const lastRow = series[series.length - 1];
+      assertFresh(lastRow.fecha, 'REM');
+      document.getElementById('rem-fecha').textContent = formatMonth(lastRow.fecha);
+      document.getElementById('rem-valor').textContent = fmtPct(lastRow.valor);
+      currentSnapshot.rem = { fechaLabel: formatMonth(lastRow.fecha), valor: fmtPct(lastRow.valor) };
+      return { ok: true, lastDate: lastRow.fecha };
+    } catch (e) {
+      console.warn('REM BCRA falló', e);
+      return { ok: false, error: e };
+    }
+  }
+
+  // Coordinador: corre las 3 series del bloque "Reservas y Tasas" y maneja un único badge.
+  async function liveBcraBloque() {
+    const badge = document.getElementById('badge-bcra');
+    const results = await Promise.all([liveReservas(), liveTpmBadlar(), liveRem()]);
+    const anyOk = results.some(r => r && r.ok);
+    const dates = results.filter(r => r && r.ok && r.lastDate).map(r => r.lastDate).sort();
+    const oldest = dates[0];
+    if (anyOk && oldest) {
+      setBadgeLive(badge, oldest);
+    } else {
+      const firstErr = results.find(r => !r.ok)?.error;
+      setBadgeFromError(badge, firstErr);
+    }
+  }
+
+  // Formato día-mes para series diarias del BCRA: "20-mayo"
+  function formatDayMonth(dateStr) {
+    if (!dateStr) return '';
+    const parts = String(dateStr).split('-');
+    if (parts.length < 3) return formatMonth(dateStr);
+    const y = Number(parts[0]), monthIdx = Number(parts[1]) - 1, day = Number(parts[2]);
+    if (isNaN(y) || isNaN(monthIdx) || isNaN(day)) return '';
+    const d = new Date(y, monthIdx, day);
+    const m = d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', '');
+    return `${day} ${m}`;
+  }
+
+  /* ============================================================
    * NAV: scroll spy + topbar title
    * ============================================================ */
   function initNav() {
@@ -2773,6 +3072,34 @@
       const badge = document.getElementById('badge-salario');
       if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.salario.fechaLabel || ''}`; }
     }
+    // === BCRA: Reservas, Tasas, REM, TC Mayorista ===
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
+    if (d.reservas) {
+      renderReservas(d.reservas.labels, d.reservas.values, true);
+      set('reservas-fecha', d.reservas.fechaLabel);
+      set('reservas-valor', d.reservas.valor);
+    }
+    if (d.tasas) {
+      renderTasas(d.tasas.labels, d.tasas.tpm, d.tasas.badlar);
+      set('tpm-fecha', d.tasas.tpmFecha);
+      set('tpm-valor', d.tasas.tpmValor);
+      set('badlar-fecha', d.tasas.badlarFecha);
+      set('badlar-valor', d.tasas.badlarValor);
+    }
+    if (d.rem) {
+      set('rem-fecha', d.rem.fechaLabel);
+      set('rem-valor', d.rem.valor);
+    }
+    if (d.reservas || d.tasas || d.rem) {
+      const badge = document.getElementById('badge-bcra');
+      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.reservas?.fechaLabel || d.tasas?.tpmFecha || d.rem?.fechaLabel || ''}`; }
+    }
+    if (d.tcMayorista) {
+      set('tc-fecha', d.tcMayorista.fechaLabel);
+      set('tc-valor', d.tcMayorista.valor);
+      const badge = document.getElementById('badge-tc');
+      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.tcMayorista.fechaLabel}`; }
+    }
     document.querySelectorAll('.section.is-live').forEach(s => s.classList.remove('is-live'));
   }
 
@@ -2818,7 +3145,13 @@
   }
 
   async function fetchAllLive() {
-    await Promise.all([liveIpc(), liveEmae(), liveSalario()]);
+    await Promise.all([
+      liveIpc(),
+      liveEmae(),
+      liveSalario(),
+      liveTcMayorista(),
+      liveBcraBloque()
+    ]);
   }
 
   /* ============================================================
