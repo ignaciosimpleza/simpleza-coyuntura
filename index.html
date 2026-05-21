@@ -12,9 +12,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <!-- Plugin de zoom: drag para hacer zoom, doble-click para resetear, scroll para pan -->
-  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap');
 
@@ -288,6 +285,30 @@
       background: rgba(247, 220, 111, 0.22);
       color: #8a6d00;
     }
+    /* Badge "ÚLTIMO DATO": conectado pero con lag natural de publicación.
+       Visualmente entre el verde (EN VIVO) y el rojo (DESACTUALIZADO). */
+    .badge-published {
+      background: rgba(247, 220, 111, 0.55);
+      color: #6b5300;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px 6px 14px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      box-shadow: 0 4px 12px rgba(218, 165, 32, 0.20);
+      border: 1px solid rgba(184, 134, 11, 0.35);
+    }
+    .badge-published::before {
+      content: '';
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #c79100;
+      display: inline-block;
+    }
+    /* Acento de "última publicación" en la card de la sección */
+    .section.is-published .card { border-color: rgba(218, 165, 32, 0.35) !important; }
+    .section.is-published .source::before { content: '○ '; color: #c79100; }
+    .section.is-published .source { color: #8a6d00 !important; font-weight: 500; }
     /* Live badge: prominente. Color saturado, mayor tamaño, sombra, uppercase. */
     .badge-live {
       background: var(--verde-menta);
@@ -418,20 +439,6 @@
     }
     .chart-wrap.tall { height: 380px; }
     .chart-wrap.short { height: 260px; }
-    .chart-wrap canvas { cursor: crosshair; }
-    .chart-zoom-hint {
-      position: absolute;
-      top: 6px; right: 8px;
-      font-size: 10px;
-      color: var(--gris-medio);
-      background: rgba(255,255,255,0.85);
-      padding: 2px 8px;
-      border-radius: 999px;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .chart-wrap:hover .chart-zoom-hint { opacity: 1; }
 
     .two-col {
       display: grid;
@@ -628,6 +635,28 @@
 
     /* === Topbar buttons === */
     .topbar-actions { display: flex; align-items: center; gap: 10px; }
+    .topbar-period {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px;
+      color: var(--gris-medio);
+    }
+    .topbar-period-label { font-weight: 500; letter-spacing: 0.3px; }
+    .topbar-period select {
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--gris-oscuro);
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 28px 6px 14px;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237F7F7F'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+    .topbar-period select:hover { border-color: var(--azul-pizarra); }
     .btn {
       display: inline-flex;
       align-items: center;
@@ -740,7 +769,7 @@
 
       /* Ocultar todo lo que no es contenido del reporte */
       .sidebar, .topbar, .snapshot-banner, .menu-toggle,
-      .topbar-actions, #refreshBtn, #saveBtn, #pdfBtn { display: none !important; }
+      .topbar-actions, #refreshBtn, #saveBtn, #pdfBtn, .topbar-period { display: none !important; }
 
       .main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
 
@@ -1054,7 +1083,7 @@
       .hero { padding: 28px 22px; }
       .hero h1 { font-size: 28px; }
       .menu-toggle { display: inline-flex !important; }
-      .topbar-meta { display: none; }
+      .topbar-meta, .topbar-period-label { display: none; }
       .btn .label { display: none; }
       .btn { padding: 7px 10px; }
     }
@@ -1125,6 +1154,10 @@
       <span style="color: rgba(255,255,255,0.35);">·</span>
       <strong style="color: var(--verde-menta);">api.bcra.gob.ar</strong>
       <span style="color: rgba(255,255,255,0.35);">·</span>
+      <strong style="color: var(--verde-menta);">XLS BCRA bandas</strong>
+      <span style="color: rgba(255,255,255,0.35);">·</span>
+      <strong style="color: var(--verde-menta);">XLS UTDT</strong> (ICG, ICC)
+      <span style="color: rgba(255,255,255,0.35);">·</span>
       <strong style="color: var(--verde-menta);">dolarapi.com</strong>
       <span style="color: rgba(255,255,255,0.35);">·</span>
       <strong style="color: var(--verde-menta);">argentinadatos.com</strong>
@@ -1141,6 +1174,16 @@
     </div>
     <div class="topbar-actions">
       <div class="topbar-meta">Reporte · <strong id="topbarMonth">Mayo 2026</strong></div>
+      <label class="topbar-period">
+        <span class="topbar-period-label">Período:</span>
+        <select id="periodSelector" title="Ventana temporal de los gráficos">
+          <option value="12">Últimos 12 meses</option>
+          <option value="24">Últimos 24 meses</option>
+          <option value="36" selected>Últimos 36 meses</option>
+          <option value="60">Últimos 5 años</option>
+          <option value="0">Todo el histórico</option>
+        </select>
+      </label>
       <button class="btn btn-icon" id="refreshBtn" title="Re-consultar APIs en vivo" aria-label="Refrescar"><span class="icon">↻</span></button>
       <button class="btn" id="pdfBtn" title="Descargar el reporte como PDF (Guardar como PDF en el diálogo de impresión)"><span>⬇</span><span class="label">PDF</span></button>
       <button class="btn btn-primary" id="saveBtn" title="Guardar snapshot del estado actual"><span>+</span><span class="label">Guardar reporte</span></button>
@@ -1752,7 +1795,7 @@
       <div class="sources">
         <div><span>Fuentes:</span> INDEC · BCRA · UTDT · The Heritage Foundation · FMI</div>
       </div>
-      <div>Datos en vivo desde <strong>apis.datos.gob.ar</strong> (INDEC), <strong>api.bcra.gob.ar</strong> (BCRA), <strong>dolarapi.com</strong> (cotizaciones del dólar) y <strong>argentinadatos.com</strong> (riesgo país). Las secciones marcadas con el badge verde <strong>EN VIVO</strong> se actualizan automáticamente cuando la API responde; si falla, se muestran los últimos valores conocidos guardados en caché. Cada serie tiene fallback cross-source: el TC mayorista intenta primero BCRA y cae a DolarAPI; el IPC intenta INDEC y cae a BCRA.</div>
+      <div>Datos en vivo desde <strong>apis.datos.gob.ar</strong> (INDEC), <strong>api.bcra.gob.ar</strong> (BCRA), XLS oficial del BCRA para <strong>bandas cambiarias</strong>, XLS de la <strong>UTDT</strong> para ICG e ICC, <strong>dolarapi.com</strong> (cotizaciones del dólar) y <strong>argentinadatos.com</strong> (riesgo país). Los badges del informe indican el estado de cada serie: <strong style="color: var(--verde-menta);">EN VIVO</strong> = dato del último mes/día, <strong style="color: #8a6d00;">ÚLTIMO DATO</strong> = la fuente respondió pero el último publicado tiene lag natural, <strong style="color: var(--terracota);">DESACTUALIZADO</strong>/<strong style="color: var(--terracota);">SIN CONEXIÓN</strong> = caímos al caché local. El TC mayorista intenta primero BCRA y cae a DolarAPI; el IPC intenta BCRA primero y cae a INDEC.</div>
       <div style="margin-top: 10px;">© Simpleza SA · Coyuntura Económica Argentina · <span id="footerMonth">Mayo 2026</span></div>
     </footer>
 
@@ -1916,19 +1959,6 @@
     Chart.defaults.plugins.legend.labels.padding = 14;
     // DPI mayor para que los charts no salgan pixelados al exportar a PDF
     Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
-    // Zoom por default en todos los charts: drag/wheel para zoom en eje X (períodos),
-    // doble click para resetear. Solo se activa cuando el plugin está cargado.
-    if (window.ChartZoom || (window.Chart && Chart.registry?.plugins?.get('zoom'))) {
-      Chart.defaults.plugins.zoom = {
-        pan:  { enabled: true, mode: 'x', modifierKey: 'shift' },
-        zoom: {
-          wheel: { enabled: true },
-          drag:  { enabled: true, backgroundColor: 'rgba(50, 232, 169, 0.18)', borderColor: 'rgba(50, 232, 169, 0.5)', borderWidth: 1 },
-          pinch: { enabled: true },
-          mode:  'x'
-        }
-      };
-    }
   }
 
   function commonScaleOpts() {
@@ -2049,19 +2079,31 @@
     }
   }
 
+  // setBadgeLive distingue tres estados según la antigüedad del dato:
+  //   ≤ 1 mes  → 🟢 "EN VIVO"      — dato del mes en curso o el anterior, realmente reciente
+  //   2-4 m    → 🟡 "ÚLTIMO DATO"   — la API responde bien pero el último publicado tiene lag
+  //                                  natural (EMAE ~2 meses, Salarios ~3 meses son típicos)
+  //   > 4 m    → no llega acá: assertFresh() lo bloquea antes y cae al catch con badge rojo
   function setBadgeLive(el, lastDate) {
     if (!el) return;
-    el.className = 'badge badge-live';
-    el.textContent = `En vivo · ${formatMonth(lastDate)}`;
+    const months = monthsSince(lastDate);
     const sec = el.closest('.section');
-    if (sec) { sec.classList.add('is-live'); sec.classList.remove('is-error'); }
+    if (months <= 1) {
+      el.className = 'badge badge-live';
+      el.textContent = `En vivo · ${formatMonth(lastDate)}`;
+      if (sec) { sec.classList.add('is-live'); sec.classList.remove('is-error', 'is-published'); }
+    } else {
+      el.className = 'badge badge-published';
+      el.textContent = `Último dato · ${formatMonth(lastDate)}`;
+      if (sec) { sec.classList.add('is-published'); sec.classList.remove('is-live', 'is-error'); }
+    }
   }
   function setBadgeError(el, msg) {
     if (!el) return;
     el.className = 'badge badge-error';
     el.textContent = msg || 'Sin conexión · datos en caché';
     const sec = el.closest('.section');
-    if (sec) { sec.classList.remove('is-live'); sec.classList.add('is-error'); }
+    if (sec) { sec.classList.remove('is-live', 'is-published'); sec.classList.add('is-error'); }
   }
   // Cuando hubo un fetch fallido pero tenemos cache en localStorage: badge ámbar
   // "Última actualización · X" en vez de un "—" vacío. Mantiene contexto al usuario.
@@ -3669,20 +3711,40 @@
     });
   }
 
-  // Cada .chart-wrap recibe un hint flotante con instrucciones del zoom + doble-click resetea.
-  function wireChartZoom() {
-    document.querySelectorAll('.chart-wrap').forEach(wrap => {
-      if (wrap.querySelector('.chart-zoom-hint')) return;
-      const hint = document.createElement('div');
-      hint.className = 'chart-zoom-hint';
-      hint.textContent = 'Drag para zoom · doble click para resetear';
-      wrap.appendChild(hint);
-      wrap.addEventListener('dblclick', () => {
-        const canvas = wrap.querySelector('canvas');
-        if (!canvas) return;
-        const chart = Chart.getChart(canvas);
-        if (chart && typeof chart.resetZoom === 'function') chart.resetZoom();
-      });
+  // El selector global de período (dropdown en el topbar) define cuántos meses de
+  // historia mostramos en los charts de series temporales. Cada serie cacheada en
+  // `currentSnapshot.X` se reslicea al cambiar este valor.
+  let currentPeriodMonths = 36;
+  function applyPeriodToAllCharts() {
+    const m = currentPeriodMonths;
+    if (currentSnapshot.ipc)      applyIpcData(slicePeriod(currentSnapshot.ipc, m, ['values', 'interanualValues']));
+    if (currentSnapshot.emae)     applyEmaeData(slicePeriod(currentSnapshot.emae, m, ['indice', 'varMensual']));
+    if (currentSnapshot.salario)  applySalarioData(slicePeriod(currentSnapshot.salario, m, ['indice', 'varAnual']));
+    if (currentSnapshot.reservas) applyReservasData(slicePeriod(currentSnapshot.reservas, m, ['values']));
+    if (currentSnapshot.tasas)    applyTasasData(slicePeriod(currentSnapshot.tasas, m, ['tpm', 'badlar']));
+    if (currentSnapshot.bandas)   applyBandasData(slicePeriod(currentSnapshot.bandas, m, ['inferior', 'superior', 'tc']));
+    if (currentSnapshot.icgSerie) applyIcgSerieData(slicePeriod(currentSnapshot.icgSerie, m, ['values']));
+    if (currentSnapshot.iccZona)  applyIccZonaData(slicePeriod(currentSnapshot.iccZona, m, ['values', 'capital', 'interior', 'gba']));
+  }
+  // Devuelve una copia del snapshot con sus labels y arrays paralelos truncados a
+  // los últimos `months` puntos. Si months == 0, devuelve el snapshot entero.
+  function slicePeriod(snap, months, arrayKeys) {
+    if (!snap || !Array.isArray(snap.labels) || months === 0) return snap;
+    const fullLen = snap.labels.length;
+    const take = Math.min(months, fullLen);
+    const start = fullLen - take;
+    const sliced = { ...snap, labels: snap.labels.slice(start) };
+    for (const k of arrayKeys) {
+      if (Array.isArray(snap[k])) sliced[k] = snap[k].slice(start);
+    }
+    return sliced;
+  }
+  function wirePeriodSelector() {
+    const sel = document.getElementById('periodSelector');
+    if (!sel) return;
+    sel.addEventListener('change', () => {
+      currentPeriodMonths = Number(sel.value) || 0;
+      applyPeriodToAllCharts();
     });
   }
 
@@ -3712,7 +3774,7 @@
     try { wireRefreshButton(); } catch (e) { console.error('wireRefreshButton falló', e); }
     try { wirePdfButton(); } catch (e) { console.error('wirePdfButton falló', e); }
     try { wireSectionToggles(); } catch (e) { console.error('wireSectionToggles falló', e); }
-    try { wireChartZoom(); } catch (e) { console.error('wireChartZoom falló', e); }
+    try { wirePeriodSelector(); } catch (e) { console.error('wirePeriodSelector falló', e); }
     try { wireReportsUI(); } catch (e) { console.error('wireReportsUI falló', e); }
 
     // Charts (depende de que Chart.js esté cargado; si falla, el resto sigue funcionando)
