@@ -648,28 +648,45 @@
 
     /* === Topbar buttons === */
     .topbar-actions { display: flex; align-items: center; gap: 10px; }
-    .topbar-period {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-size: 12px;
+    /* Selector "Desde / hasta" por gráfico, dentro del card-header de cada chart. */
+    .card-period {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
       color: var(--gris-medio);
+      margin-left: auto;
+      flex-wrap: wrap;
     }
-    .topbar-period-label { font-weight: 500; letter-spacing: 0.3px; }
-    .topbar-period select {
+    .card-period .lbl { font-weight: 500; letter-spacing: 0.4px; margin-right: 2px; }
+    .card-period .sep { color: var(--gris-medio); padding: 0 1px; }
+    .card-period select {
       font-family: inherit;
-      font-size: 12.5px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--gris-oscuro);
       background: #fff;
       border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 6px 28px 6px 14px;
+      border-radius: 6px;
+      padding: 3px 22px 3px 8px;
       cursor: pointer;
       appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237F7F7F'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%237F7F7F'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: right 10px center;
+      background-position: right 7px center;
     }
-    .topbar-period select:hover { border-color: var(--azul-pizarra); }
+    .card-period select:hover { border-color: var(--azul-pizarra); }
+    .card-period select:focus { outline: 2px solid rgba(50, 232, 169, 0.4); outline-offset: 1px; }
+    .card-period .reset {
+      background: none; border: 0; cursor: pointer;
+      color: var(--gris-medio); font-size: 14px; padding: 2px 6px;
+      border-radius: 4px; line-height: 1;
+    }
+    .card-period .reset:hover { color: var(--gris-oscuro); background: var(--crema-fondo); }
+    /* En el PDF, los selectores no aplican — se ocultan */
+    @media print {
+      .card-period { display: none !important; }
+    }
     .btn {
       display: inline-flex;
       align-items: center;
@@ -782,7 +799,7 @@
 
       /* Ocultar todo lo que no es contenido del reporte */
       .sidebar, .topbar, .snapshot-banner, .menu-toggle,
-      .topbar-actions, #refreshBtn, #saveBtn, #pdfBtn, .topbar-period { display: none !important; }
+      .topbar-actions, #refreshBtn, #saveBtn, #pdfBtn { display: none !important; }
 
       .main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
 
@@ -1096,7 +1113,7 @@
       .hero { padding: 28px 22px; }
       .hero h1 { font-size: 28px; }
       .menu-toggle { display: inline-flex !important; }
-      .topbar-meta, .topbar-period-label { display: none; }
+      .topbar-meta { display: none; }
       .btn .label { display: none; }
       .btn { padding: 7px 10px; }
     }
@@ -1187,16 +1204,6 @@
     </div>
     <div class="topbar-actions">
       <div class="topbar-meta">Reporte · <strong id="topbarMonth">Mayo 2026</strong></div>
-      <label class="topbar-period">
-        <span class="topbar-period-label">Período:</span>
-        <select id="periodSelector" title="Ventana temporal de los gráficos">
-          <option value="12">Últimos 12 meses</option>
-          <option value="24">Últimos 24 meses</option>
-          <option value="36" selected>Últimos 36 meses</option>
-          <option value="60">Últimos 5 años</option>
-          <option value="0">Todo el histórico</option>
-        </select>
-      </label>
       <button class="btn btn-icon" id="refreshBtn" title="Re-consultar APIs en vivo" aria-label="Refrescar"><span class="icon">↻</span></button>
       <button class="btn" id="pdfBtn" title="Descargar el reporte como PDF (Guardar como PDF en el diálogo de impresión)"><span>⬇</span><span class="label">PDF</span></button>
       <button class="btn btn-primary" id="saveBtn" title="Guardar snapshot del estado actual"><span>+</span><span class="label">Guardar reporte</span></button>
@@ -2092,51 +2099,79 @@
     }
   }
 
+  // Cada badge tiene una fuente principal asociada. Se muestra en el texto del badge para
+  // que el usuario siempre sepa de dónde vienen los datos. Las funciones live pueden
+  // sobrescribir esto si la serie cae a un fallback distinto (ej: IPC primario BCRA, si
+  // falla cae a INDEC; en ese caso le pasamos 'INDEC' explícito).
+  const BADGE_PRIMARY_SOURCE = {
+    'badge-ipc':      'BCRA / INDEC',
+    'badge-emae':     'INDEC',
+    'badge-salario':  'INDEC',
+    'badge-tc':       'BCRA / DolarAPI',
+    'badge-bcra':     'BCRA + ArgentinaDatos',
+    'badge-dolar':    'DolarAPI',
+    'badge-icg':      'UTDT (XLS)',
+    'badge-icc':      'UTDT (XLS)',
+    'badge-libertad': 'Heritage (scraping)'
+  };
+  function badgeSource(el, override) {
+    return override || (el && BADGE_PRIMARY_SOURCE[el.id]) || '';
+  }
+  function badgeShortDate(savedAtIso) {
+    try { return new Date(savedAtIso).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }).replace('.', ''); }
+    catch { return 'caché'; }
+  }
+
   // setBadgeLive distingue tres estados según la antigüedad del dato:
   //   ≤ 1 mes  → 🟢 "EN VIVO"      — dato del mes en curso o el anterior, realmente reciente
-  //   2-4 m    → 🟡 "ÚLTIMO DATO"   — la API responde bien pero el último publicado tiene lag
-  //                                  natural (EMAE ~2 meses, Salarios ~3 meses son típicos)
+  //   2-4 m    → 🟡 "ÚLTIMO DATO"   — la fuente responde bien pero el último publicado tiene
+  //                                  lag natural (EMAE ~2 meses, Salarios ~3 meses son típicos)
   //   > 4 m    → no llega acá: assertFresh() lo bloquea antes y cae al catch con badge rojo
-  function setBadgeLive(el, lastDate) {
+  // En todos los casos el badge incluye la fuente: "EN VIVO · BCRA · ABR-26".
+  function setBadgeLive(el, lastDate, sourceOverride) {
     if (!el) return;
     const months = monthsSince(lastDate);
     const sec = el.closest('.section');
+    const src = badgeSource(el, sourceOverride);
+    const srcPart = src ? ` · ${src}` : '';
     if (months <= 1) {
       el.className = 'badge badge-live';
-      el.textContent = `En vivo · ${formatMonth(lastDate)}`;
+      el.textContent = `En vivo${srcPart} · ${formatMonth(lastDate)}`;
       if (sec) { sec.classList.add('is-live'); sec.classList.remove('is-error', 'is-published'); }
     } else {
       el.className = 'badge badge-published';
-      el.textContent = `Último dato · ${formatMonth(lastDate)}`;
+      el.textContent = `Último dato${srcPart} · ${formatMonth(lastDate)}`;
       if (sec) { sec.classList.add('is-published'); sec.classList.remove('is-live', 'is-error'); }
     }
   }
-  function setBadgeError(el, msg) {
+  // setBadgeError: el live fetch falló y no había cache. Indicamos la fuente que falló.
+  function setBadgeError(el, msg, sourceOverride) {
     if (!el) return;
     el.className = 'badge badge-error';
-    el.textContent = msg || 'Sin conexión · datos en caché';
+    const src = badgeSource(el, sourceOverride);
+    el.textContent = msg || (src ? `Sin conexión · ${src}` : 'Sin conexión');
     const sec = el.closest('.section');
     if (sec) { sec.classList.remove('is-live', 'is-published'); sec.classList.add('is-error'); }
   }
-  // Cuando hubo un fetch fallido pero tenemos cache en localStorage: badge ámbar
-  // "Última actualización · X" en vez de un "—" vacío. Mantiene contexto al usuario.
-  function setBadgeStale(el, savedAtIso) {
+  // setBadgeStale: live falló pero teníamos cache de una visita anterior. Indicamos
+  // fuente + fecha del cache (no de la observación), porque eso indica cuándo fue la
+  // última vez que la fuente respondió bien.
+  function setBadgeStale(el, savedAtIso, sourceOverride) {
     if (!el) return;
     el.className = 'badge badge-static';
-    let when = '';
-    try {
-      const d = new Date(savedAtIso);
-      when = d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }).replace('.', '');
-    } catch { /* noop */ }
-    el.textContent = `Última actualización · ${when || 'caché'}`;
+    const src = badgeSource(el, sourceOverride);
+    const srcPart = src ? ` · ${src}` : '';
+    el.textContent = `Caché local${srcPart} · ${badgeShortDate(savedAtIso)}`;
     const sec = el.closest('.section');
     if (sec) { sec.classList.remove('is-live'); sec.classList.remove('is-error'); }
   }
-  function setBadgeFromError(el, e) {
+  function setBadgeFromError(el, e, sourceOverride) {
+    const src = badgeSource(el, sourceOverride);
     if (e && e.stale) {
-      setBadgeError(el, `API desactualizada · último ${formatMonth(e.staleDate)}`);
+      const dateLabel = formatMonth(e.staleDate);
+      setBadgeError(el, src ? `${src} desactualizada · último ${dateLabel}` : `Desactualizado · ${dateLabel}`, sourceOverride);
     } else {
-      setBadgeError(el);
+      setBadgeError(el, null, sourceOverride);
     }
   }
 
@@ -2634,6 +2669,7 @@
       let monthly = null;
       let yearOverYearPct = null;
       let yearOverYearSeries = null; // serie completa para graficar interanual mes a mes
+      let activeSource = null;       // qué estrategia terminó funcionando (para el badge)
 
       // Estrategia 1 (PRIMARIA): BCRA IDs 27 + 28 — alineado con la publicación del INDEC.
       try {
@@ -2645,10 +2681,10 @@
           monthly = bMensual.map(r => ({ date: r.fecha, valor: r.valor }));
           if (bInteranual.length) {
             yearOverYearPct = bInteranual[bInteranual.length - 1].valor;
-            // Mapeamos la serie i.a. a las mismas fechas que `monthly` para el chart
             const ialByDate = new Map(bInteranual.map(r => [r.fecha, r.valor]));
             yearOverYearSeries = monthly.map(r => ialByDate.get(r.date) ?? null);
           }
+          activeSource = 'BCRA';
         }
       } catch (e) {
         console.warn('IPC BCRA falló, intento INDEC raw index', e);
@@ -2669,6 +2705,7 @@
               const latestIdx = +series[series.length - 1][1];
               const yearAgoIdx = +series[series.length - 13][1];
               yearOverYearPct = ((latestIdx / yearAgoIdx) - 1) * 100;
+              activeSource = 'INDEC';
             }
           }
         } catch (e) {
@@ -2685,6 +2722,7 @@
         const last12 = monthly.slice(-12);
         const acum = last12.reduce((acc, r) => acc * (1 + r.valor / 100), 1) - 1;
         yearOverYearPct = acum * 100;
+        activeSource = 'INDEC';
       }
 
       // Si todavía no tenemos serie interanual mes a mes, la calculamos compuesta sobre
@@ -2733,7 +2771,7 @@
       };
       cacheLastKnown('ipc', currentSnapshot.ipc);
 
-      setBadgeLive(badge, lastRow.date);
+      setBadgeLive(badge, lastRow.date, activeSource);
     } catch (e) {
       console.warn('IPC: no se pudo usar API en vivo', e);
       // Si hay cache de una visita anterior, restauramos antes de caer al fallback hardcoded
@@ -3048,7 +3086,7 @@
       currentSnapshot.tcMayorista = snapshot;
       applyTcMayoristaData(snapshot);
       cacheLastKnown('tcMayorista', snapshot);
-      setBadgeLive(badge, snapshot._lastDate);
+      setBadgeLive(badge, snapshot._lastDate, snapshot._source);
     } catch (e) {
       console.warn('TC Mayorista: BCRA y DolarAPI ambos fallaron', e);
       if (!restoreFromCache('tcMayorista', 'badge-tc', applyTcMayoristaData)) {
@@ -3814,40 +3852,95 @@
     });
   }
 
-  // El selector global de período (dropdown en el topbar) define cuántos meses de
-  // historia mostramos en los charts de series temporales. Cada serie cacheada en
-  // `currentSnapshot.X` se reslicea al cambiar este valor.
-  let currentPeriodMonths = 36;
-  function applyPeriodToAllCharts() {
-    const m = currentPeriodMonths;
-    if (currentSnapshot.ipc)      applyIpcData(slicePeriod(currentSnapshot.ipc, m, ['values', 'interanualValues']));
-    if (currentSnapshot.emae)     applyEmaeData(slicePeriod(currentSnapshot.emae, m, ['indice', 'varMensual']));
-    if (currentSnapshot.salario)  applySalarioData(slicePeriod(currentSnapshot.salario, m, ['indice', 'varAnual']));
-    if (currentSnapshot.reservas) applyReservasData(slicePeriod(currentSnapshot.reservas, m, ['values']));
-    if (currentSnapshot.tasas)    applyTasasData(slicePeriod(currentSnapshot.tasas, m, ['tpm', 'badlar']));
-    if (currentSnapshot.bandas)   applyBandasData(slicePeriod(currentSnapshot.bandas, m, ['inferior', 'superior', 'tc']));
-    if (currentSnapshot.icgSerie) applyIcgSerieData(slicePeriod(currentSnapshot.icgSerie, m, ['values']));
-    if (currentSnapshot.iccZona)  applyIccZonaData(slicePeriod(currentSnapshot.iccZona, m, ['values', 'capital', 'interior', 'gba']));
+  // Selector "Desde / hasta" por gráfico. La idea:
+  //   1. Después de cada render, guardamos la data completa del chart en canvas._fullData
+  //   2. Inyectamos dos <select> en la card-header con los labels del chart
+  //   3. Al cambiar, sliceamos canvas._fullData y reasignamos chart.data
+  //
+  // No hacemos refactor de live functions: trabajamos sobre lo que está actualmente
+  // pintado en el chart. La ventana inicial es la que dejó el live (ej. IPC 36 meses).
+  function snapshotChartFull(canvas) {
+    const chart = Chart.getChart(canvas);
+    if (!chart) return;
+    canvas._fullData = {
+      labels: [...chart.data.labels],
+      datasets: chart.data.datasets.map(ds => ({ ...ds, data: Array.isArray(ds.data) ? [...ds.data] : ds.data }))
+    };
+    // Si ya estaban montadas las opciones del periodo, repoblar (puede haber cambiado el chart)
+    const card = canvas.closest('.card');
+    if (card) populatePeriodOptions(card);
   }
-  // Devuelve una copia del snapshot con sus labels y arrays paralelos truncados a
-  // los últimos `months` puntos. Si months == 0, devuelve el snapshot entero.
-  function slicePeriod(snap, months, arrayKeys) {
-    if (!snap || !Array.isArray(snap.labels) || months === 0) return snap;
-    const fullLen = snap.labels.length;
-    const take = Math.min(months, fullLen);
-    const start = fullLen - take;
-    const sliced = { ...snap, labels: snap.labels.slice(start) };
-    for (const k of arrayKeys) {
-      if (Array.isArray(snap[k])) sliced[k] = snap[k].slice(start);
-    }
-    return sliced;
+  function populatePeriodOptions(card) {
+    const canvas = card.querySelector('canvas');
+    const periodEl = card.querySelector('.card-period');
+    if (!canvas || !periodEl || !canvas._fullData) return;
+    const labels = canvas._fullData.labels || [];
+    const fromSel = periodEl.querySelector('.from');
+    const toSel = periodEl.querySelector('.to');
+    const fromVal = fromSel.value, toVal = toSel.value;
+    fromSel.innerHTML = labels.map((l, i) => `<option value="${i}">${l}</option>`).join('');
+    toSel.innerHTML = labels.map((l, i) => `<option value="${i}">${l}</option>`).join('');
+    // Restaurar selección anterior si todavía es válida; si no, usar full range
+    fromSel.value = (fromVal && +fromVal < labels.length) ? fromVal : 0;
+    toSel.value   = (toVal && +toVal < labels.length)   ? toVal   : (labels.length - 1);
   }
-  function wirePeriodSelector() {
-    const sel = document.getElementById('periodSelector');
-    if (!sel) return;
-    sel.addEventListener('change', () => {
-      currentPeriodMonths = Number(sel.value) || 0;
-      applyPeriodToAllCharts();
+  function applyChartRange(card) {
+    const canvas = card.querySelector('canvas');
+    if (!canvas || !canvas._fullData) return;
+    const chart = Chart.getChart(canvas);
+    if (!chart) return;
+    const fromSel = card.querySelector('.card-period .from');
+    const toSel   = card.querySelector('.card-period .to');
+    let from = +fromSel.value, to = +toSel.value;
+    if (from > to) [from, to] = [to, from];
+    const full = canvas._fullData;
+    chart.data.labels = full.labels.slice(from, to + 1);
+    chart.data.datasets.forEach((ds, di) => {
+      const fullDs = full.datasets[di];
+      if (fullDs && Array.isArray(fullDs.data)) ds.data = fullDs.data.slice(from, to + 1);
+    });
+    chart.update('none');
+  }
+  // Cards a las que les agregamos selector. Excluimos charts categóricos (Libertad
+  // comparativa, ICG por zona) donde "desde/hasta por fecha" no aplica.
+  const PERIOD_CHART_CANVASES = [
+    'chart-libertad-arg', 'chart-icg-serie', 'chart-icc-zona',
+    'chart-bandas', 'chart-ipc', 'chart-emision', 'chart-base',
+    'chart-emae', 'chart-salario', 'chart-reservas', 'chart-tasas'
+  ];
+  function wireChartPeriodSelectors() {
+    PERIOD_CHART_CANVASES.forEach(canvasId => {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const card = canvas.closest('.card');
+      if (!card) return;
+      const header = card.querySelector('.card-header');
+      if (!header || card.querySelector('.card-period')) return;
+      const periodEl = document.createElement('div');
+      periodEl.className = 'card-period';
+      periodEl.innerHTML = `
+        <span class="lbl">Período:</span>
+        <select class="from" aria-label="Desde"></select>
+        <span class="sep">→</span>
+        <select class="to" aria-label="Hasta"></select>
+        <button class="reset" type="button" title="Mostrar todo el rango disponible" aria-label="Resetear">↺</button>
+      `;
+      header.appendChild(periodEl);
+      const fromSel = periodEl.querySelector('.from');
+      const toSel = periodEl.querySelector('.to');
+      const resetBtn = periodEl.querySelector('.reset');
+      fromSel.addEventListener('change', () => applyChartRange(card));
+      toSel.addEventListener('change', () => applyChartRange(card));
+      resetBtn.addEventListener('click', () => {
+        const labels = canvas._fullData?.labels || [];
+        fromSel.value = 0;
+        toSel.value = Math.max(0, labels.length - 1);
+        applyChartRange(card);
+      });
+      // Si el chart ya está renderizado, hacemos snapshot y populamos
+      if (Chart.getChart(canvas)) {
+        snapshotChartFull(canvas);
+      }
     });
   }
 
@@ -3864,6 +3957,16 @@
       liveIcc(),
       liveLibertad()
     ]);
+    // Después de actualizar todos los charts live, refrescamos los selectores
+    // "Desde / hasta" con los labels finales de cada chart.
+    try { refreshAllChartPeriodSnapshots(); }
+    catch (e) { console.warn('refresh period snapshots falló', e); }
+  }
+  function refreshAllChartPeriodSnapshots() {
+    PERIOD_CHART_CANVASES.forEach(canvasId => {
+      const canvas = document.getElementById(canvasId);
+      if (canvas && Chart.getChart(canvas)) snapshotChartFull(canvas);
+    });
   }
 
   /* ============================================================
@@ -3878,7 +3981,7 @@
     try { wireRefreshButton(); } catch (e) { console.error('wireRefreshButton falló', e); }
     try { wirePdfButton(); } catch (e) { console.error('wirePdfButton falló', e); }
     try { wireSectionToggles(); } catch (e) { console.error('wireSectionToggles falló', e); }
-    try { wirePeriodSelector(); } catch (e) { console.error('wirePeriodSelector falló', e); }
+    try { wireChartPeriodSelectors(); } catch (e) { console.error('wireChartPeriodSelectors falló', e); }
     try { wireReportsUI(); } catch (e) { console.error('wireReportsUI falló', e); }
 
     // Charts (depende de que Chart.js esté cargado; si falla, el resto sigue funcionando)
@@ -3895,6 +3998,9 @@
         renderIpc(FALLBACK.ipc.labels, FALLBACK.ipc.values, false);
         renderEmae(FALLBACK.emae.labels, FALLBACK.emae.values, FALLBACK.emae.varMensual, false);
         renderSalario(FALLBACK.salario.labels, FALLBACK.salario.indice, FALLBACK.salario.varAnual, false);
+        // Después del primer render con fallback, capturamos la data inicial en cada chart
+        // para que los selectores "Desde/hasta" tengan opciones al toque.
+        refreshAllChartPeriodSnapshots();
       } catch (e) {
         console.error('render charts falló', e);
       }
