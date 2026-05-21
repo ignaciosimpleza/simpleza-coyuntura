@@ -1070,6 +1070,8 @@
     <div class="sidebar-footer">
       Datos en vivo desde<br>
       <strong style="color: var(--verde-menta);">apis.datos.gob.ar</strong>
+      <span style="color: rgba(255,255,255,0.35);"> · </span>
+      <strong style="color: var(--verde-menta);">api.bcra.gob.ar</strong>
     </div>
   </aside>
 
@@ -1660,7 +1662,7 @@
       <div class="sources">
         <div><span>Fuentes:</span> INDEC · BCRA · UTDT · The Heritage Foundation · FMI</div>
       </div>
-      <div>Datos en vivo desde <strong>apis.datos.gob.ar</strong>. Las secciones marcadas con el badge verde <strong>EN VIVO</strong> se actualizan automáticamente cuando la API responde; si falla, se muestran los valores en caché del último cierre.</div>
+      <div>Datos en vivo desde <strong>apis.datos.gob.ar</strong> (INDEC) y <strong>api.bcra.gob.ar</strong> (BCRA). Las secciones marcadas con el badge verde <strong>EN VIVO</strong> se actualizan automáticamente cuando la API responde; si falla, se muestran los últimos valores conocidos guardados en caché.</div>
       <div style="margin-top: 10px;">© Simpleza SA · Coyuntura Económica Argentina · <span id="footerMonth">Mayo 2026</span></div>
     </footer>
 
@@ -1930,12 +1932,43 @@
     const sec = el.closest('.section');
     if (sec) { sec.classList.remove('is-live'); sec.classList.add('is-error'); }
   }
+  // Cuando hubo un fetch fallido pero tenemos cache en localStorage: badge ámbar
+  // "Última actualización · X" en vez de un "—" vacío. Mantiene contexto al usuario.
+  function setBadgeStale(el, savedAtIso) {
+    if (!el) return;
+    el.className = 'badge badge-static';
+    let when = '';
+    try {
+      const d = new Date(savedAtIso);
+      when = d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }).replace('.', '');
+    } catch { /* noop */ }
+    el.textContent = `Última actualización · ${when || 'caché'}`;
+    const sec = el.closest('.section');
+    if (sec) { sec.classList.remove('is-live'); sec.classList.remove('is-error'); }
+  }
   function setBadgeFromError(el, e) {
     if (e && e.stale) {
       setBadgeError(el, `API desactualizada · último ${formatMonth(e.staleDate)}`);
     } else {
       setBadgeError(el);
     }
+  }
+
+  // === Cache "última observación conocida" en localStorage ===
+  // Cuando el fetch live falla (sin conexión, CORS bloqueado, etc.), en lugar de mostrar
+  // valores vacíos restauramos el último estado bueno conocido. Persistente entre sesiones.
+  const CACHE_NS = 'coyuntura:lastKnown:';
+  function cacheLastKnown(key, data) {
+    if (!key || !data) return;
+    try {
+      localStorage.setItem(CACHE_NS + key, JSON.stringify({ data, savedAt: new Date().toISOString() }));
+    } catch { /* localStorage lleno, deshabilitado, modo incógnito: ignoramos */ }
+  }
+  function getLastKnown(key) {
+    try {
+      const raw = localStorage.getItem(CACHE_NS + key);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
   }
   function formatMonth(dateStr) {
     if (!dateStr) return '';
@@ -2426,12 +2459,16 @@
         mensualSub: mensualSubTxt,
         anual: anualLabel
       };
+      cacheLastKnown('ipc', currentSnapshot.ipc);
 
       setBadgeLive(badge, lastRow.date);
     } catch (e) {
       console.warn('IPC: no se pudo usar API en vivo', e);
-      renderIpc(FALLBACK.ipc.labels, FALLBACK.ipc.values, false);
-      setBadgeFromError(badge, e);
+      // Si hay cache de una visita anterior, restauramos antes de caer al fallback hardcoded
+      if (!restoreFromCache('ipc', 'badge-ipc', applyIpcData)) {
+        renderIpc(FALLBACK.ipc.labels, FALLBACK.ipc.values, false);
+        setBadgeFromError(badge, e);
+      }
     }
   }
 
@@ -2474,12 +2511,15 @@
         valorSub: `EMAE · ${fechaTxt}`,
         varAnualLabel
       };
+      cacheLastKnown('emae', currentSnapshot.emae);
 
       setBadgeLive(badge, lastRow[0]);
     } catch (e) {
       console.warn('EMAE: no se pudo usar API en vivo', e);
-      renderEmae(FALLBACK.emae.labels, FALLBACK.emae.values, FALLBACK.emae.varMensual, false);
-      setBadgeFromError(badge, e);
+      if (!restoreFromCache('emae', 'badge-emae', applyEmaeData)) {
+        renderEmae(FALLBACK.emae.labels, FALLBACK.emae.values, FALLBACK.emae.varMensual, false);
+        setBadgeFromError(badge, e);
+      }
     }
   }
 
@@ -2532,12 +2572,15 @@
         valorSub,
         varAnualLabel
       };
+      cacheLastKnown('salario', currentSnapshot.salario);
 
       setBadgeLive(badge, last[last.length - 1].date);
     } catch (e) {
       console.warn('Salario: no se pudo usar API en vivo', e);
-      renderSalario(FALLBACK.salario.labels, FALLBACK.salario.indice, FALLBACK.salario.varAnual, false);
-      setBadgeFromError(badge, e);
+      if (!restoreFromCache('salario', 'badge-salario', applySalarioData)) {
+        renderSalario(FALLBACK.salario.labels, FALLBACK.salario.indice, FALLBACK.salario.varAnual, false);
+        setBadgeFromError(badge, e);
+      }
     }
   }
 
@@ -2624,12 +2667,16 @@
       const lastRow = series[series.length - 1];
       assertFresh(lastRow.fecha, 'Reservas');
       renderReservas(labels, values, true);
-      document.getElementById('reservas-fecha').textContent = formatDayMonth(lastRow.fecha);
-      document.getElementById('reservas-valor').textContent = fmtUsdK(lastRow.valor);
+      setText('reservas-fecha', formatDayMonth(lastRow.fecha));
+      setText('reservas-valor', fmtUsdK(lastRow.valor));
       currentSnapshot.reservas = { labels, values, fechaLabel: formatDayMonth(lastRow.fecha), valor: fmtUsdK(lastRow.valor) };
+      cacheLastKnown('reservas', currentSnapshot.reservas);
       return { ok: true, lastDate: lastRow.fecha };
     } catch (e) {
       console.warn('Reservas BCRA falló', e);
+      // Restaurar desde cache si está disponible (badge se setea en liveBcraBloque)
+      const cached = getLastKnown('reservas');
+      if (cached) { applyReservasData(cached.data); currentSnapshot.reservas = cached.data; }
       return { ok: false, error: e };
     }
   }
@@ -2676,11 +2723,14 @@
         badlarFecha: lastBadlar ? formatDayMonth(lastBadlar.fecha) : null,
         badlarValor: lastBadlar ? fmtPct(lastBadlar.valor) : null
       };
+      cacheLastKnown('tasas', currentSnapshot.tasas);
       const lastDate = (lastTpm?.fecha || lastBadlar?.fecha);
       assertFresh(lastDate, 'TPM/BADLAR');
       return { ok: true, lastDate };
     } catch (e) {
       console.warn('TPM/BADLAR BCRA falló', e);
+      const cached = getLastKnown('tasas');
+      if (cached) { applyTasasData(cached.data); currentSnapshot.tasas = cached.data; }
       return { ok: false, error: e };
     }
   }
@@ -2693,20 +2743,24 @@
       if (series.length === 0) throw new Error('Sin datos');
       const lastRow = series[series.length - 1];
       assertFresh(lastRow.fecha, 'TC mayorista');
-      document.getElementById('tc-fecha').textContent = formatDayMonth(lastRow.fecha);
-      document.getElementById('tc-valor').textContent = fmtMoney(lastRow.valor);
+      const fechaTxt = formatDayMonth(lastRow.fecha);
+      const valorTxt = fmtMoney(lastRow.valor);
       // Sub: var. % de los últimos 30 días aprox
+      let varTxt = null;
       const prior = series[Math.max(0, series.length - 22)];
       if (prior && prior.valor) {
         const pct = ((lastRow.valor / prior.valor) - 1) * 100;
-        document.getElementById('tc-sub').textContent =
-          `${pct >= 0 ? '+' : ''}${fmtPct(pct)} vs ${formatDayMonth(prior.fecha)}`;
+        varTxt = `${pct >= 0 ? '+' : ''}${fmtPct(pct)} vs ${formatDayMonth(prior.fecha)}`;
       }
-      currentSnapshot.tcMayorista = { fechaLabel: formatDayMonth(lastRow.fecha), valor: fmtMoney(lastRow.valor) };
+      currentSnapshot.tcMayorista = { fechaLabel: fechaTxt, valor: valorTxt, varTxt };
+      applyTcMayoristaData(currentSnapshot.tcMayorista);
+      cacheLastKnown('tcMayorista', currentSnapshot.tcMayorista);
       setBadgeLive(badge, lastRow.fecha);
     } catch (e) {
       console.warn('TC Mayorista BCRA falló', e);
-      setBadgeFromError(badge, e);
+      if (!restoreFromCache('tcMayorista', 'badge-tc', applyTcMayoristaData)) {
+        setBadgeFromError(badge, e);
+      }
     }
   }
 
@@ -2717,12 +2771,15 @@
       if (series.length === 0) throw new Error('Sin datos');
       const lastRow = series[series.length - 1];
       assertFresh(lastRow.fecha, 'REM');
-      document.getElementById('rem-fecha').textContent = formatMonth(lastRow.fecha);
-      document.getElementById('rem-valor').textContent = fmtPct(lastRow.valor);
+      setText('rem-fecha', formatMonth(lastRow.fecha));
+      setText('rem-valor', fmtPct(lastRow.valor));
       currentSnapshot.rem = { fechaLabel: formatMonth(lastRow.fecha), valor: fmtPct(lastRow.valor) };
+      cacheLastKnown('rem', currentSnapshot.rem);
       return { ok: true, lastDate: lastRow.fecha };
     } catch (e) {
       console.warn('REM BCRA falló', e);
+      const cached = getLastKnown('rem');
+      if (cached) { applyRemData(cached.data); currentSnapshot.rem = cached.data; }
       return { ok: false, error: e };
     }
   }
@@ -2737,8 +2794,15 @@
     if (anyOk && oldest) {
       setBadgeLive(badge, oldest);
     } else {
-      const firstErr = results.find(r => !r.ok)?.error;
-      setBadgeFromError(badge, firstErr);
+      // Si todas las series fallaron pero hay cache, mostramos "Última actualización"
+      // (el restore individual ya repobló los KPIs dentro de cada live function).
+      const anyCached = ['reservas', 'tasas', 'rem'].map(k => getLastKnown(k)).find(c => c);
+      if (anyCached) {
+        setBadgeStale(badge, anyCached.savedAt);
+      } else {
+        const firstErr = results.find(r => !r.ok)?.error;
+        setBadgeFromError(badge, firstErr);
+      }
     }
   }
 
@@ -3036,70 +3100,93 @@
     }
   }
 
+  // Helpers de DOM: setear texto en un id si el elemento existe
+  const setText = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
+
+  // Funciones de aplicación por serie: dado un snapshot fragment, actualizan KPIs + chart.
+  // Reutilizables desde: (1) cada live function tras un fetch exitoso, (2) restauración desde
+  // cache cuando un fetch falla, (3) carga de un reporte guardado.
+  function applyIpcData(d) {
+    if (!d) return;
+    renderIpc(d.labels, d.values, true);
+    setText('ipc-fecha', d.fechaLabel);
+    setText('kpi-ipc-mensual-fecha', d.fechaLabel);
+    setText('ipc-mensual', d.mensual);
+    setText('ipc-mensual-sub', d.mensualSub);
+    setText('kpi-ipc-mensual', d.mensual);
+    setText('kpi-ipc-mensual-sub', d.mensualSub);
+    setText('ipc-anual', d.anual);
+    setText('kpi-ipc-anual', d.anual);
+  }
+  function applyEmaeData(d) {
+    if (!d) return;
+    renderEmae(d.labels, d.indice, d.varMensual, true);
+    setText('emae-fecha', d.fechaLabel);
+    setText('emae-valor', d.valor);
+    setText('kpi-emae', d.valor);
+    setText('kpi-emae-sub', d.valorSub);
+    setText('emae-var-anual', d.varAnualLabel);
+  }
+  function applySalarioData(d) {
+    if (!d) return;
+    renderSalario(d.labels, d.indice, d.varAnual, true);
+    setText('salario-indice', d.valor);
+    setText('salario-indice-sub', d.valorSub);
+    setText('salario-var', d.varAnualLabel);
+  }
+  function applyReservasData(d) {
+    if (!d) return;
+    renderReservas(d.labels, d.values, true);
+    setText('reservas-fecha', d.fechaLabel);
+    setText('reservas-valor', d.valor);
+  }
+  function applyTasasData(d) {
+    if (!d) return;
+    renderTasas(d.labels, d.tpm, d.badlar);
+    setText('tpm-fecha', d.tpmFecha);
+    setText('tpm-valor', d.tpmValor);
+    setText('badlar-fecha', d.badlarFecha);
+    setText('badlar-valor', d.badlarValor);
+  }
+  function applyRemData(d) {
+    if (!d) return;
+    setText('rem-fecha', d.fechaLabel);
+    setText('rem-valor', d.valor);
+  }
+  function applyTcMayoristaData(d) {
+    if (!d) return;
+    setText('tc-fecha', d.fechaLabel);
+    setText('tc-valor', d.valor);
+    setText('tc-sub', d.varTxt);
+  }
+
+  // Restaurar UNA serie desde cache (cuando el live falla y no querés mostrar valores vacíos).
+  // Devuelve true si había cache disponible y se restauró.
+  function restoreFromCache(key, badgeId, applyFn) {
+    const cached = getLastKnown(key);
+    if (!cached) return false;
+    applyFn(cached.data);
+    currentSnapshot[key] = cached.data;
+    if (badgeId) setBadgeStale(document.getElementById(badgeId), cached.savedAt);
+    return true;
+  }
+
   function applySnapshot(rep) {
     const d = rep.data || {};
-    if (d.ipc) {
-      renderIpc(d.ipc.labels, d.ipc.values, true);
-      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
-      set('ipc-fecha', d.ipc.fechaLabel);
-      set('kpi-ipc-mensual-fecha', d.ipc.fechaLabel);
-      set('ipc-mensual', d.ipc.mensual);
-      set('ipc-mensual-sub', d.ipc.mensualSub);
-      set('kpi-ipc-mensual', d.ipc.mensual);
-      set('kpi-ipc-mensual-sub', d.ipc.mensualSub);
-      set('ipc-anual', d.ipc.anual);
-      set('kpi-ipc-anual', d.ipc.anual);
-      const badge = document.getElementById('badge-ipc');
-      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.ipc.fechaLabel || ''}`; }
-    }
-    if (d.emae) {
-      renderEmae(d.emae.labels, d.emae.indice, d.emae.varMensual, true);
-      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
-      set('emae-fecha', d.emae.fechaLabel);
-      set('emae-valor', d.emae.valor);
-      set('kpi-emae', d.emae.valor);
-      set('kpi-emae-sub', d.emae.valorSub);
-      set('emae-var-anual', d.emae.varAnualLabel);
-      const badge = document.getElementById('badge-emae');
-      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.emae.fechaLabel || ''}`; }
-    }
-    if (d.salario) {
-      renderSalario(d.salario.labels, d.salario.indice, d.salario.varAnual, true);
-      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
-      set('salario-indice', d.salario.valor);
-      set('salario-indice-sub', d.salario.valorSub);
-      set('salario-var', d.salario.varAnualLabel);
-      const badge = document.getElementById('badge-salario');
-      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.salario.fechaLabel || ''}`; }
-    }
-    // === BCRA: Reservas, Tasas, REM, TC Mayorista ===
-    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
-    if (d.reservas) {
-      renderReservas(d.reservas.labels, d.reservas.values, true);
-      set('reservas-fecha', d.reservas.fechaLabel);
-      set('reservas-valor', d.reservas.valor);
-    }
-    if (d.tasas) {
-      renderTasas(d.tasas.labels, d.tasas.tpm, d.tasas.badlar);
-      set('tpm-fecha', d.tasas.tpmFecha);
-      set('tpm-valor', d.tasas.tpmValor);
-      set('badlar-fecha', d.tasas.badlarFecha);
-      set('badlar-valor', d.tasas.badlarValor);
-    }
-    if (d.rem) {
-      set('rem-fecha', d.rem.fechaLabel);
-      set('rem-valor', d.rem.valor);
-    }
+    const setSnapshotBadge = (id, fechaLabel) => {
+      const badge = document.getElementById(id);
+      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${fechaLabel || ''}`; }
+    };
+    if (d.ipc)         { applyIpcData(d.ipc);         setSnapshotBadge('badge-ipc', d.ipc.fechaLabel); }
+    if (d.emae)        { applyEmaeData(d.emae);       setSnapshotBadge('badge-emae', d.emae.fechaLabel); }
+    if (d.salario)     { applySalarioData(d.salario); setSnapshotBadge('badge-salario', d.salario.fechaLabel); }
+    if (d.reservas)    applyReservasData(d.reservas);
+    if (d.tasas)       applyTasasData(d.tasas);
+    if (d.rem)         applyRemData(d.rem);
     if (d.reservas || d.tasas || d.rem) {
-      const badge = document.getElementById('badge-bcra');
-      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.reservas?.fechaLabel || d.tasas?.tpmFecha || d.rem?.fechaLabel || ''}`; }
+      setSnapshotBadge('badge-bcra', d.reservas?.fechaLabel || d.tasas?.tpmFecha || d.rem?.fechaLabel);
     }
-    if (d.tcMayorista) {
-      set('tc-fecha', d.tcMayorista.fechaLabel);
-      set('tc-valor', d.tcMayorista.valor);
-      const badge = document.getElementById('badge-tc');
-      if (badge) { badge.className = 'badge badge-static'; badge.textContent = `Snapshot · ${d.tcMayorista.fechaLabel}`; }
-    }
+    if (d.tcMayorista) { applyTcMayoristaData(d.tcMayorista); setSnapshotBadge('badge-tc', d.tcMayorista.fechaLabel); }
     document.querySelectorAll('.section.is-live').forEach(s => s.classList.remove('is-live'));
   }
 
