@@ -12,6 +12,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <!-- Plugin de zoom: drag para hacer zoom, doble-click para resetear, scroll para pan -->
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap');
 
@@ -215,7 +218,36 @@
       gap: 16px;
       margin-bottom: 22px;
     }
-    .section-header-text { max-width: 760px; }
+    .section-header-text { max-width: 760px; flex: 1; }
+    /* === Colapsable: cada sección puede plegarse haciendo click en el botón ▾ ===
+       Si está plegada, el body de la sección se oculta en pantalla y NO va al PDF. */
+    .section-toggle {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--azul-pizarra);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      transition: all 0.15s;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .section-toggle:hover { border-color: var(--azul-pizarra); color: var(--gris-oscuro); background: var(--crema-fondo); }
+    .section-toggle .arrow { font-size: 13px; line-height: 1; transition: transform 0.2s; }
+    .section.is-collapsed .section-toggle .arrow { transform: rotate(-90deg); }
+    .section.is-collapsed > *:not(.section-header) { display: none; }
+    .section.is-collapsed .section-toggle { background: rgba(108, 134, 140, 0.08); }
+    .section.is-collapsed .section-toggle .label-show { display: inline; }
+    .section.is-collapsed .section-toggle .label-hide { display: none; }
+    .section-toggle .label-show { display: none; }
+    .section-toggle .label-hide { display: inline; }
     .section-eyebrow {
       display: inline-block;
       font-size: 11px;
@@ -386,6 +418,20 @@
     }
     .chart-wrap.tall { height: 380px; }
     .chart-wrap.short { height: 260px; }
+    .chart-wrap canvas { cursor: crosshair; }
+    .chart-zoom-hint {
+      position: absolute;
+      top: 6px; right: 8px;
+      font-size: 10px;
+      color: var(--gris-medio);
+      background: rgba(255,255,255,0.85);
+      padding: 2px 8px;
+      border-radius: 999px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .chart-wrap:hover .chart-zoom-hint { opacity: 1; }
 
     .two-col {
       display: grid;
@@ -904,6 +950,11 @@
       /* El footer de pantalla no aporta nada en el PDF: la contraportada ya tiene
          fuentes, contacto y branding. Lo ocultamos para evitar una página extra. */
       footer { display: none !important; }
+
+      /* Las secciones colapsadas en pantalla no van al PDF: el botón ▾ funciona
+         como selector implícito de qué partes del informe se imprimen. */
+      .section.is-collapsed { display: none !important; }
+      .section-toggle { display: none !important; }
 
       /* === CIERRE / contraportada === */
       .print-back {
@@ -1865,6 +1916,19 @@
     Chart.defaults.plugins.legend.labels.padding = 14;
     // DPI mayor para que los charts no salgan pixelados al exportar a PDF
     Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+    // Zoom por default en todos los charts: drag/wheel para zoom en eje X (períodos),
+    // doble click para resetear. Solo se activa cuando el plugin está cargado.
+    if (window.ChartZoom || (window.Chart && Chart.registry?.plugins?.get('zoom'))) {
+      Chart.defaults.plugins.zoom = {
+        pan:  { enabled: true, mode: 'x', modifierKey: 'shift' },
+        zoom: {
+          wheel: { enabled: true },
+          drag:  { enabled: true, backgroundColor: 'rgba(50, 232, 169, 0.18)', borderColor: 'rgba(50, 232, 169, 0.5)', borderWidth: 1 },
+          pinch: { enabled: true },
+          mode:  'x'
+        }
+      };
+    }
   }
 
   function commonScaleOpts() {
@@ -1896,11 +1960,13 @@
   }
 
   // === BCRA Estadísticas Monetarias v3.0 ===
-  // Endpoint público sin autenticación: api.bcra.gob.ar/estadisticas/v3.0/monetarias/{idVariable}
-  // IDs útiles: 1 Reservas, 5 TC Mayorista, 6 Tasa de Política Monetaria, 7 BADLAR, 29 Inflación REM 12m.
-  const BCRA_BASE = 'https://api.bcra.gob.ar/estadisticas/v3.0/monetarias';
+  // Pegamos al proxy serverless propio (/api/bcra/{id}) en lugar de directamente
+  // a api.bcra.gob.ar para evitar el bloqueo de CORS que tenía el browser. El proxy
+  // cachea 5 min en edge y devuelve exactamente el mismo payload del BCRA.
+  // IDs útiles: 1 Reservas, 5 TC Mayorista, 6 TPM, 7 BADLAR, 27 IPC mensual,
+  // 28 IPC interanual, 29 Inflación REM 12m.
+  const BCRA_BASE = '/api/bcra';
   async function fetchBcra(idVariable, opts = {}) {
-    // Si daysBack está seteado, pedimos solo los últimos N días; sin él, pedimos toda la serie.
     const params = new URLSearchParams();
     if (opts.daysBack) {
       const hasta = new Date();
@@ -2230,72 +2296,119 @@
   }
 
   // --- Bandas ---
-  function renderBandas() {
+  let bandasChart = null;
+  function renderBandas(labels, inferior, superior, tc) {
+    // Sin argumentos = usa el FALLBACK hardcoded
+    if (!labels) {
+      const d = FALLBACK.bandas;
+      labels = d.labels; inferior = d.inf; superior = d.sup; tc = d.tc;
+    }
     const ctx = document.getElementById('chart-bandas');
-    const d = FALLBACK.bandas;
-    // Find index of "01/01/26" approximately
-    const idxAjuste = d.labels.findIndex(l => l.startsWith('05/01') || l.startsWith('06/01') || l.startsWith('12/01'));
-    new Chart(ctx, {
+    if (bandasChart) bandasChart.destroy();
+    bandasChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: d.labels,
+        labels,
         datasets: [
-          { label: 'Banda Superior', data: d.sup, borderColor: C.amarillo, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2 },
-          { label: 'TC mayorista', data: d.tc, borderColor: C.verde, backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
-          { label: 'Banda Inferior', data: d.inf, borderColor: C.amarillo, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, borderDash: [] }
+          { label: 'Banda Superior', data: superior, borderColor: C.amarillo, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.15, spanGaps: true },
+          { label: 'TC mayorista',   data: tc,        borderColor: C.verde,    backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.25, spanGaps: true },
+          { label: 'Banda Inferior', data: inferior,  borderColor: C.amarillo, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.15, spanGaps: true }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { intersect: false, mode: 'index' },
-        plugins: {
-          legend: { position: 'bottom' },
-          annotation: idxAjuste >= 0 ? {
-            annotations: {
-              line1: {
-                type: 'line',
-                xMin: idxAjuste,
-                xMax: idxAjuste,
-                borderColor: C.grisMedio,
-                borderWidth: 1,
-                borderDash: [4, 4]
-              }
-            }
-          } : undefined
-        },
+        plugins: { legend: { position: 'bottom' } },
         scales: {
           x: { grid: { display: false }, ticks: { maxRotation: 60, autoSkip: true, autoSkipPadding: 16 } },
-          y: { suggestedMin: 0, suggestedMax: 2000, grid: { color: '#F0E6D6' }, ticks: { callback: (v) => '$' + v } }
+          y: { suggestedMin: 0, grid: { color: '#F0E6D6' }, ticks: { callback: (v) => '$' + v } }
         }
       }
     });
   }
 
+  // Fetches: BCRA bandas (XLSX, vía /api/bcra-bandas) + TC mayorista BCRA (ID 5).
+  // Las bandas vienen proyectadas hasta fin del próximo mes (porque el BCRA las publica
+  // con cada IPC T-2). El TC mayorista termina hoy. El gráfico muestra los 3 en la misma
+  // escala temporal: para fechas posteriores a hoy el TC es null, pero las bandas siguen.
+  function applyBandasData(d) {
+    if (!d) return;
+    renderBandas(d.labels, d.inferior, d.superior, d.tc);
+  }
+  async function liveBandas() {
+    try {
+      const [bandasRes, tcSeries] = await Promise.all([
+        fetch('/api/bcra-bandas').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetchBcra(5, { daysBack: 380 }).catch(() => [])
+      ]);
+      if (!bandasRes || !Array.isArray(bandasRes.data) || bandasRes.data.length === 0) {
+        throw new Error('BCRA bandas XLSX: sin datos');
+      }
+      // Restringimos a últimos 12 meses + el mes siguiente (proyección de la banda)
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const cutoffStart = new Date(); cutoffStart.setDate(cutoffStart.getDate() - 380);
+      const startIso = cutoffStart.toISOString().slice(0, 10);
+      const bands = bandasRes.data.filter(r => r.fecha >= startIso);
+      // Union de fechas (bandas tienen TODOS los días, TC solo días hábiles)
+      const tcByDate = new Map(tcSeries.map(r => [r.fecha, r.valor]));
+      const labels = bands.map(r => formatDayMonth(r.fecha));
+      const inferior = bands.map(r => r.inferior);
+      const superior = bands.map(r => r.superior);
+      const tc = bands.map(r => tcByDate.has(r.fecha) ? tcByDate.get(r.fecha) : null);
+      const snapshot = { labels, inferior, superior, tc };
+      currentSnapshot.bandas = snapshot;
+      applyBandasData(snapshot);
+      cacheLastKnown('bandas', snapshot);
+      // El último día con dato de banda (puede ser fin del próximo mes)
+      const lastBandDate = bands[bands.length - 1].fecha;
+      console.info('Bandas live OK; ultima fecha de banda:', lastBandDate, '· hoy:', todayIso);
+    } catch (e) {
+      console.warn('Bandas falló', e);
+      // Si hay cache, restauramos; si no, dejamos el render del FALLBACK que ya pintamos al boot
+      restoreFromCache('bandas', null, applyBandasData);
+    }
+  }
+
   // --- IPC (LIVE) ---
   let ipcChart = null;
-  function renderIpc(labels, values, isLive) {
+  function renderIpc(labels, values, isLive, interanualValues) {
     const ctx = document.getElementById('chart-ipc');
     if (ipcChart) ipcChart.destroy();
-    ipcChart = new Chart(ctx, {
+    const datasets = [{
       type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'IPC mensual %',
-          data: values,
-          backgroundColor: values.map(v => v >= 5 ? C.terracota : (v >= 3 ? C.amarillo : C.verde)),
-          borderRadius: 4,
-          maxBarThickness: 14
-        }]
-      },
+      label: 'IPC mensual %',
+      data: values,
+      backgroundColor: values.map(v => v >= 5 ? C.terracota : (v >= 3 ? C.amarillo : C.verde)),
+      borderRadius: 4,
+      maxBarThickness: 14,
+      yAxisID: 'y'
+    }];
+    if (Array.isArray(interanualValues) && interanualValues.some(v => v != null)) {
+      datasets.push({
+        type: 'line',
+        label: 'Var. interanual (12m móviles)',
+        data: interanualValues,
+        borderColor: C.azul,
+        backgroundColor: 'transparent',
+        borderWidth: 2.4,
+        tension: 0.25,
+        pointRadius: 0,
+        yAxisID: 'y1',
+        spanGaps: true
+      });
+    }
+    ipcChart = new Chart(ctx, {
+      data: { labels, datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        interaction: { intersect: false, mode: 'index' },
+        plugins: { legend: { position: 'bottom' } },
         scales: {
           x: { grid: { display: false }, ticks: { maxRotation: 60, autoSkip: true, autoSkipPadding: 12 } },
-          y: { beginAtZero: true, grid: { color: '#F0E6D6' }, ticks: { callback: v => v + '%' } }
+          y:  { beginAtZero: true, position: 'left',  grid: { color: '#F0E6D6' }, ticks: { callback: v => v + '%' } },
+          y1: { beginAtZero: true, position: 'right', grid: { display: false }, ticks: { callback: v => v + '%' }, suggestedMin: 0 }
         }
       }
     });
@@ -2450,73 +2563,82 @@
    * LIVE DATA WIRING
    * ============================================================ */
 
-  // IPC: serie 148.3_INIVELNAL_DICI_M_26. Intentamos primero el índice de nivel general
-  // (computando la variación en cliente — más preciso) y, si la API no expone el índice,
-  // caemos al representation `:percent_change` (proporción decimal: 0.034 = 3.4%, convertimos *100).
+  // IPC: ahora el BCRA es la fuente PRIMARIA (IDs 27 mensual y 28 interanual). El BCRA
+  // replica los datos del INDEC con ~1 día de delay, mientras que apis.datos.gob.ar (Min.
+  // Economía) tarda semanas en reflejar nuevas publicaciones del INDEC. Si BCRA falla,
+  // caemos a las estrategias 2 y 3 sobre apis.datos.gob.ar.
   async function liveIpc() {
     const badge = document.getElementById('badge-ipc');
     try {
-      // Estrategia 1: índice de nivel. Los valores deberían ser >= 50 (IPC base dic-2016=100
-      // ha subido mucho desde entonces). Si los valores parecen proporciones (~0.03), descartamos.
       let monthly = null;
       let yearOverYearPct = null;
+      let yearOverYearSeries = null; // serie completa para graficar interanual mes a mes
+
+      // Estrategia 1 (PRIMARIA): BCRA IDs 27 + 28 — alineado con la publicación del INDEC.
       try {
-        const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26', { limit: 800 });
-        const series = (json.data || []).filter(r => r[1] != null);
-        if (series.length >= 13) {
-          const sampleVal = +series[series.length - 1][1];
-          if (sampleVal >= 30) {
-            // Es un índice válido. Computamos variaciones.
-            monthly = series.slice(1).map(([d, v], i) => ({
-              date: d,
-              valor: ((+v / +series[i][1]) - 1) * 100
-            }));
-            const latestIdx = +series[series.length - 1][1];
-            const yearAgoIdx = +series[series.length - 13][1];
-            yearOverYearPct = ((latestIdx / yearAgoIdx) - 1) * 100;
-          }
-        }
-      } catch (e) {
-        console.warn('IPC nivel falló, intento percent_change', e);
-      }
-
-      // Estrategia 2: percent_change. La API devuelve proporciones decimales — convertimos a %.
-      if (!monthly) {
-        try {
-          const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26:percent_change', { limit: 800 });
-          const series = (json.data || []).filter(r => r[1] != null);
-          if (series.length >= 13) {
-            monthly = series.map(([d, v]) => ({ date: d, valor: +v * 100 }));
-            const last12 = monthly.slice(-12);
-            const acum = last12.reduce((acc, r) => acc * (1 + r.valor / 100), 1) - 1;
-            yearOverYearPct = acum * 100;
-          }
-        } catch (e) {
-          console.warn('IPC INDEC percent_change falló, intento BCRA', e);
-        }
-      }
-
-      // Estrategia 3 (fallback cross-source): BCRA IDs 27 (mensual) y 28 (interanual).
-      // El BCRA replica el IPC del INDEC, así que cuando INDEC está caído tenemos un
-      // segundo transporte para el mismo dato oficial.
-      if (!monthly) {
         const [bMensual, bInteranual] = await Promise.all([
           fetchBcra(27).catch(() => []),
           fetchBcra(28).catch(() => [])
         ]);
-        if (bMensual.length < 13) throw new Error('IPC: todas las fuentes fallaron');
-        monthly = bMensual.map(r => ({ date: r.fecha, valor: r.valor }));
-        if (bInteranual.length) {
-          yearOverYearPct = bInteranual[bInteranual.length - 1].valor;
-        } else {
-          // Si BCRA no devolvió interanual, lo calculamos sobre las observaciones mensuales
-          const last12 = monthly.slice(-12);
-          const acum = last12.reduce((acc, r) => acc * (1 + r.valor / 100), 1) - 1;
-          yearOverYearPct = acum * 100;
+        if (bMensual.length >= 13) {
+          monthly = bMensual.map(r => ({ date: r.fecha, valor: r.valor }));
+          if (bInteranual.length) {
+            yearOverYearPct = bInteranual[bInteranual.length - 1].valor;
+            // Mapeamos la serie i.a. a las mismas fechas que `monthly` para el chart
+            const ialByDate = new Map(bInteranual.map(r => [r.fecha, r.valor]));
+            yearOverYearSeries = monthly.map(r => ialByDate.get(r.date) ?? null);
+          }
+        }
+      } catch (e) {
+        console.warn('IPC BCRA falló, intento INDEC raw index', e);
+      }
+
+      // Estrategia 2 (fallback): INDEC índice de nivel, computando la variación en cliente.
+      if (!monthly) {
+        try {
+          const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26', { limit: 800 });
+          const series = (json.data || []).filter(r => r[1] != null);
+          if (series.length >= 13) {
+            const sampleVal = +series[series.length - 1][1];
+            if (sampleVal >= 30) {
+              monthly = series.slice(1).map(([d, v], i) => ({
+                date: d,
+                valor: ((+v / +series[i][1]) - 1) * 100
+              }));
+              const latestIdx = +series[series.length - 1][1];
+              const yearAgoIdx = +series[series.length - 13][1];
+              yearOverYearPct = ((latestIdx / yearAgoIdx) - 1) * 100;
+            }
+          }
+        } catch (e) {
+          console.warn('IPC INDEC raw index falló, intento percent_change', e);
         }
       }
 
+      // Estrategia 3 (último fallback): INDEC :percent_change.
+      if (!monthly) {
+        const json = await fetchAPI('148.3_INIVELNAL_DICI_M_26:percent_change', { limit: 800 });
+        const series = (json.data || []).filter(r => r[1] != null);
+        if (series.length < 13) throw new Error('IPC: todas las fuentes fallaron');
+        monthly = series.map(([d, v]) => ({ date: d, valor: +v * 100 }));
+        const last12 = monthly.slice(-12);
+        const acum = last12.reduce((acc, r) => acc * (1 + r.valor / 100), 1) - 1;
+        yearOverYearPct = acum * 100;
+      }
+
+      // Si todavía no tenemos serie interanual mes a mes, la calculamos compuesta sobre
+      // ventanas rodantes de 12 meses (necesario para graficar la línea de interanual).
+      if (!yearOverYearSeries) {
+        yearOverYearSeries = monthly.map((_, i) => {
+          if (i < 11) return null;
+          const window = monthly.slice(i - 11, i + 1);
+          const acum = window.reduce((a, r) => a * (1 + r.valor / 100), 1) - 1;
+          return acum * 100;
+        });
+      }
+
       const last36 = monthly.slice(-36);
+      const last36Anual = yearOverYearSeries.slice(-36);
 
       // Validar frescura ANTES de pintar nada — si la API devolvió data vieja
       // dejamos el FALLBACK ya renderizado y caemos al catch con badge de error.
@@ -2525,7 +2647,8 @@
 
       const labels = last36.map(r => formatMonth(r.date));
       const values = last36.map(r => r.valor);
-      renderIpc(labels, values, true);
+      const interanualValues = last36Anual;
+      renderIpc(labels, values, true, interanualValues);
 
       const fechaTxt = formatMonth(lastRow.date);
       const mensualTxt = fmtPct(lastRow.valor);
@@ -2536,13 +2659,12 @@
       document.getElementById('kpi-ipc-mensual-sub').textContent = mensualSubTxt;
       document.getElementById('kpi-ipc-mensual-fecha').textContent = fechaTxt;
 
-      // Interanual: ya fue calculado por cualquiera de las dos estrategias.
       const anualLabel = yearOverYearPct != null ? fmtPct(yearOverYearPct) : '—';
       document.getElementById('ipc-anual').textContent = anualLabel;
       document.getElementById('kpi-ipc-anual').textContent = anualLabel;
 
       currentSnapshot.ipc = {
-        labels, values,
+        labels, values, interanualValues,
         fechaLabel: fechaTxt,
         mensual: mensualTxt,
         mensualSub: mensualSubTxt,
@@ -3309,7 +3431,7 @@
   // cache cuando un fetch falla, (3) carga de un reporte guardado.
   function applyIpcData(d) {
     if (!d) return;
-    renderIpc(d.labels, d.values, true);
+    renderIpc(d.labels, d.values, true, d.interanualValues);
     setText('ipc-fecha', d.fechaLabel);
     setText('kpi-ipc-mensual-fecha', d.fechaLabel);
     setText('ipc-mensual', d.mensual);
@@ -3434,12 +3556,65 @@
     });
   }
 
+  // Cada sección puede plegarse en pantalla. Si está plegada, también se omite del PDF.
+  // El estado por sección persiste en localStorage para que sobreviva refreshes.
+  const COLLAPSE_KEY = 'coyuntura:collapsed';
+  function getCollapsedSections() {
+    try { return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]')); }
+    catch { return new Set(); }
+  }
+  function saveCollapsedSections(set) {
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(Array.from(set))); }
+    catch { /* noop */ }
+  }
+  function wireSectionToggles() {
+    const collapsed = getCollapsedSections();
+    document.querySelectorAll('main .section[id]').forEach(section => {
+      const header = section.querySelector('.section-header');
+      if (!header || section.querySelector('.section-toggle')) return;
+      const btn = document.createElement('button');
+      btn.className = 'section-toggle';
+      btn.type = 'button';
+      btn.setAttribute('aria-controls', section.id);
+      btn.innerHTML = `<span class="arrow">▾</span><span class="label-hide">Ocultar</span><span class="label-show">Mostrar</span>`;
+      header.appendChild(btn);
+      if (collapsed.has(section.id)) section.classList.add('is-collapsed');
+      btn.addEventListener('click', () => {
+        section.classList.toggle('is-collapsed');
+        const set = getCollapsedSections();
+        if (section.classList.contains('is-collapsed')) set.add(section.id);
+        else set.delete(section.id);
+        saveCollapsedSections(set);
+        // Forzar resize para que los charts no queden mal calibrados al expandirse
+        window.dispatchEvent(new Event('resize'));
+      });
+    });
+  }
+
+  // Cada .chart-wrap recibe un hint flotante con instrucciones del zoom + doble-click resetea.
+  function wireChartZoom() {
+    document.querySelectorAll('.chart-wrap').forEach(wrap => {
+      if (wrap.querySelector('.chart-zoom-hint')) return;
+      const hint = document.createElement('div');
+      hint.className = 'chart-zoom-hint';
+      hint.textContent = 'Drag para zoom · doble click para resetear';
+      wrap.appendChild(hint);
+      wrap.addEventListener('dblclick', () => {
+        const canvas = wrap.querySelector('canvas');
+        if (!canvas) return;
+        const chart = Chart.getChart(canvas);
+        if (chart && typeof chart.resetZoom === 'function') chart.resetZoom();
+      });
+    });
+  }
+
   async function fetchAllLive() {
     await Promise.all([
       liveIpc(),
       liveEmae(),
       liveSalario(),
       liveTcMayorista(),
+      liveBandas(),
       liveBcraBloque(),
       liveCotizaciones()
     ]);
@@ -3456,6 +3631,8 @@
     try { initNav(); } catch (e) { console.error('initNav falló', e); }
     try { wireRefreshButton(); } catch (e) { console.error('wireRefreshButton falló', e); }
     try { wirePdfButton(); } catch (e) { console.error('wirePdfButton falló', e); }
+    try { wireSectionToggles(); } catch (e) { console.error('wireSectionToggles falló', e); }
+    try { wireChartZoom(); } catch (e) { console.error('wireChartZoom falló', e); }
     try { wireReportsUI(); } catch (e) { console.error('wireReportsUI falló', e); }
 
     // Charts (depende de que Chart.js esté cargado; si falla, el resto sigue funcionando)
