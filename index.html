@@ -699,8 +699,8 @@
       .main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
 
       /* === PORTADA (página 1) ===
-         Width 100% para que llene el área de impresión sin importar los márgenes del driver.
-         min-height genera una página entera incluso si el contenido es corto. */
+         Diseño sobrio: fondo blanco, tipografía clara, sin gradientes ni círculos.
+         Más legible y más confiable cross-browser/cross-printer que el diseño con efectos. */
       .print-only { display: block; }
       .print-cover {
         page-break-after: always;
@@ -708,62 +708,53 @@
         width: 100%;
         min-height: 245mm;
         box-sizing: border-box;
-        background: linear-gradient(155deg, #fff 0%, #fff 55%, #f6efe2 100%) !important;
+        background: #fff !important;
         display: flex !important;
         flex-direction: column;
         position: relative;
-        overflow: hidden;
       }
-      .print-cover::after {
-        content: '';
-        position: absolute;
-        top: -10%; right: -25%;
-        width: 95%; aspect-ratio: 1;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(50, 232, 169, 0.18) 0%, transparent 65%);
-        pointer-events: none;
-      }
-      .print-cover-top { display: flex; align-items: center; padding-bottom: 4mm; }
+      .print-cover::after { display: none !important; }
+      .print-cover-top { display: flex; align-items: center; padding-bottom: 30mm; }
       .print-cover-logo {
         max-height: 56px;
         max-width: 200px;
         filter: invert(1) brightness(0.16);
       }
-      .print-cover-body { flex: 1; display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 1; padding: 14mm 0; }
-      .print-cover-rule { width: 60px; height: 3px; background: var(--verde-menta); margin-bottom: 14px; }
+      .print-cover-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+      .print-cover-rule { width: 64px; height: 3px; background: var(--verde-menta); margin-bottom: 14px; }
       .print-cover-eyebrow {
-        font-size: 9pt;
-        letter-spacing: 2px;
+        font-size: 10pt;
+        letter-spacing: 2.2px;
         text-transform: uppercase;
         color: #6C868C;
         font-weight: 700;
-        margin-bottom: 18px;
+        margin-bottom: 22px;
       }
       .print-cover-title {
-        font-size: 46pt;
+        font-size: 44pt;
         font-weight: 800;
-        line-height: 0.98;
-        letter-spacing: -1.6px;
+        line-height: 1.02;
+        letter-spacing: -1.4px;
         color: #1a2426;
-        margin: 0 0 18px;
+        margin: 0 0 20px;
       }
       .print-cover-subtitle {
         font-size: 13pt;
         font-weight: 400;
         color: #6C868C;
-        line-height: 1.35;
+        line-height: 1.4;
         max-width: 80%;
-        margin: 0;
+        margin: 0 0 24mm;
       }
       .print-cover-accent {
-        width: 50%; height: 4px; background: var(--verde-menta);
-        margin-top: 18mm;
+        width: 90mm; height: 2px; background: #d4d4d4;
+        margin-top: 0;
       }
       .print-cover-footer {
         display: flex; justify-content: space-between; align-items: flex-end;
         font-size: 9pt; color: #4d4d4d; line-height: 1.5;
-        border-top: 1px solid #d4d4d4; padding-top: 10px;
-        position: relative; z-index: 1;
+        border-top: 1px solid #d4d4d4; padding-top: 12px;
+        margin-top: 8mm;
       }
       .print-cover-footer strong { color: #1a2426; font-weight: 700; }
       .print-cover-url { font-weight: 700; color: var(--gris-oscuro); letter-spacing: 0.3px; }
@@ -795,19 +786,32 @@
         font-weight: 800;
       }
 
+      /* === Distribución predictible: una sección por página ===
+         La estrategia anterior dependía de que el motor de impresión hiciera bien
+         break-inside: avoid, pero Edge/Microsoft Print to PDF lo interpreta distinto
+         a Chrome headless y termina solapando contenido. La forma robusta es forzar
+         page-break-before en cada sección: cada bloque temático en su propia hoja. */
       .section {
-        margin-bottom: 14px !important;
-        page-break-inside: auto;
-        break-inside: auto;
+        page-break-before: always !important;
+        break-before: page !important;
+        /* No forzamos break-inside: avoid porque cuando una sección es más alta que la página
+           (caso típico: inflación, con chart de IPC + tabla por grupos) el motor termina
+           moviendo TODO el contenido a la página siguiente y dejando la primera con sólo
+           header + KPIs. Mejor permitir el split: la sección arranca en su propia página,
+           y si rebalsa, continúa en la siguiente — siempre con header impreso de contexto. */
+        margin-bottom: 0 !important;
       }
-      .section-header { margin-bottom: 8px !important; page-break-after: avoid; break-after: avoid; }
-      .section-title { font-size: 15pt !important; margin-bottom: 4px !important; letter-spacing: -0.2px !important; }
-      .section-eyebrow { font-size: 8.5pt !important; margin-bottom: 3px !important; }
-      .section-lead { font-size: 9.5pt !important; margin-bottom: 0 !important; }
+      /* Las primeras dos secciones (resumen kpi-grid + sección 01) podrían quedar
+         juntas pero preferimos uniformidad: cada sección arranca página. */
+
+      .section-header { margin-bottom: 14px !important; }
+      .section-title { font-size: 17pt !important; margin-bottom: 6px !important; letter-spacing: -0.3px !important; }
+      .section-eyebrow { font-size: 9pt !important; margin-bottom: 4px !important; }
+      .section-lead { font-size: 10.5pt !important; margin-bottom: 0 !important; line-height: 1.45 !important; }
 
       /* Bloquear roturas dentro de elementos atómicos (charts, tablas, KPI grid, KPI cards)
-         pero NO dentro de las cards: que la card se pueda partir si su chart no entra,
-         evitando los huecos blancos al fondo de página. */
+         pero NO en las cards: dejarlas romper si hace falta, así el motor de impresión
+         logra acomodar dos cards en el remanente de la página en vez de pushar todo. */
       .kpi-grid, .kpi-card, table, .chart-wrap {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
@@ -818,56 +822,59 @@
       }
 
       .kpi-grid {
-        gap: 6px !important;
-        margin-bottom: 8px !important;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+        gap: 8px !important;
+        margin-bottom: 14px !important;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
       }
-      .kpi-card { padding: 8px 12px !important; }
+      .kpi-card { padding: 12px 14px !important; }
       .kpi-card.accent { border-left-width: 3px !important; }
-      .kpi-label { font-size: 7pt !important; letter-spacing: 0.8px !important; margin-bottom: 4px !important; }
-      .kpi-value { font-size: 15pt !important; line-height: 1.05 !important; }
-      .kpi-value.small { font-size: 10pt !important; }
-      .kpi-sub, .kpi-delta { font-size: 7.5pt !important; margin-top: 3px !important; }
+      .kpi-label { font-size: 8pt !important; letter-spacing: 1px !important; margin-bottom: 6px !important; }
+      .kpi-value { font-size: 18pt !important; line-height: 1.05 !important; }
+      .kpi-value.small { font-size: 12pt !important; }
+      .kpi-sub, .kpi-delta { font-size: 9pt !important; margin-top: 5px !important; }
 
-      .card { padding: 10px 12px !important; border: 1px solid #e0e0e0 !important; box-shadow: none !important; margin-bottom: 6px !important; }
+      .card { padding: 14px 16px !important; border: 1px solid #e0e0e0 !important; box-shadow: none !important; margin-bottom: 10px !important; }
       .card-header {
-        margin-bottom: 6px !important;
+        margin-bottom: 10px !important;
         page-break-after: avoid !important;
         break-after: avoid !important;
       }
-      .card-title { font-size: 9.5pt !important; font-weight: 700 !important; }
-      .card-title small { font-size: 8pt !important; font-weight: 400 !important; }
+      .card-title { font-size: 10.5pt !important; font-weight: 700 !important; }
+      .card-title small { font-size: 9pt !important; font-weight: 400 !important; }
 
-      /* Charts más chicos para que un sección entera entre por página. La altura efectiva
-         máxima del area de impresión en A4 con márgenes default es ~250mm; con header (15mm)
-         + KPI grid (25mm) + chart card (≈70mm) sobra para meter una sección extra al lado. */
-      .chart-wrap { height: 5.6cm !important; }
-      .chart-wrap.tall { height: 6.4cm !important; }
-      .chart-wrap.short { height: 4.4cm !important; }
+      /* Charts apilados verticalmente. Cada sección entra en una página (~250mm) con:
+         header (30mm) + KPIs (35mm) + 1 ó 2 charts (~150-180mm restantes). */
+      .chart-wrap { height: 7cm !important; }
+      .chart-wrap.tall { height: 8.5cm !important; }
+      .chart-wrap.short { height: 5.5cm !important; }
 
-      table { font-size: 7.5pt !important; }
-      th { font-size: 6.5pt !important; padding: 4px 6px !important; background: #f0e6d6 !important; letter-spacing: 0.3px !important; }
-      td { padding: 2.5px 6px !important; }
+      table { font-size: 8pt !important; }
+      th { font-size: 7pt !important; padding: 4px 7px !important; background: #f0e6d6 !important; letter-spacing: 0.3px !important; }
+      td { padding: 2.5px 7px !important; }
 
-      .source { font-size: 7pt !important; font-style: italic !important; color: #888 !important; margin-top: 4px !important; }
+      .source { font-size: 8pt !important; font-style: italic !important; color: #888 !important; margin-top: 6px !important; }
       .source::before { content: '' !important; }
       .badge { display: none !important; }
       .section.is-live .card { border-color: #e0e0e0 !important; box-shadow: none !important; }
       .section.is-live .source { color: #888 !important; font-weight: 400 !important; }
 
-      /* Forzar dos columnas reales en print (sin esto, el responsive @media (max-width: 1024px)
-         se activa porque la página A4 mide ~794px y stackea verticalmente, dejando huecos). */
+      /* Two-col side-by-side en print: con cada sección en su propia página, ya no
+         hay riesgo de que un chart desborde sobre otra sección. Los dos charts de
+         libertad/confianza/inflación entran cómodamente lado a lado en una hoja. */
       .two-col {
         display: grid !important;
-        grid-template-columns: 1.5fr 1fr !important;
-        gap: 8px !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+        page-break-inside: auto !important;
+        break-inside: auto !important;
       }
       .two-col.even {
         grid-template-columns: 1fr 1fr !important;
       }
 
-      footer { font-size: 8pt !important; margin-top: 18px !important; padding-top: 10px !important; border-top: 1px solid #e0e0e0 !important; color: #888 !important; }
-      footer strong { color: #4d4d4d !important; }
+      /* El footer de pantalla no aporta nada en el PDF: la contraportada ya tiene
+         fuentes, contacto y branding. Lo ocultamos para evitar una página extra. */
+      footer { display: none !important; }
 
       /* === CIERRE / contraportada === */
       .print-back {
