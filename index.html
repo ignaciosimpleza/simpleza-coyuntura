@@ -486,16 +486,62 @@
       white-space: nowrap;
     }
     .reports-list a:hover { color: #fff; }
+    /* Botón eliminar: oculto por default, sólo aparece al pasar el mouse sobre el reporte
+       o cuando recibe foco con teclado. Eso evita misclicks accidentales. */
     .reports-list .del {
       background: none;
       border: 0;
-      color: rgba(255,255,255,0.35);
+      color: rgba(255,255,255,0.45);
       cursor: pointer;
-      font-size: 14px;
-      padding: 2px 6px;
+      font-size: 16px;
+      line-height: 1;
+      padding: 4px 8px;
       border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s, background 0.15s;
     }
-    .reports-list .del:hover { color: var(--terracota); background: rgba(205,97,85,0.1); }
+    .reports-list li:hover .del,
+    .reports-list li:focus-within .del,
+    .reports-list .del:focus { opacity: 1; }
+    .reports-list .del:hover { color: var(--terracota); background: rgba(205,97,85,0.15); }
+
+    /* Estado "¿confirmás?": reemplaza el contenido normal de la fila con un yes/no inline.
+       No usamos confirm() nativo porque se dismissea sin querer con Enter. */
+    .reports-list li .confirm {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      min-width: 0;
+    }
+    .reports-list li.confirming { background: rgba(205,97,85,0.12); border: 1px solid rgba(205,97,85,0.3); padding: 6px 8px; }
+    .reports-list li.confirming a,
+    .reports-list li.confirming .del { display: none; }
+    .reports-list li.confirming .confirm { display: flex; }
+    .reports-list .confirm-text {
+      font-size: 11px;
+      color: rgba(255,255,255,0.85);
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .reports-list .confirm-yes, .reports-list .confirm-no {
+      border: 0;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .reports-list .confirm-yes { background: var(--terracota); color: #fff; }
+    .reports-list .confirm-yes:hover { background: #b04437; }
+    .reports-list .confirm-no { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8); }
+    .reports-list .confirm-no:hover { background: rgba(255,255,255,0.15); }
     .reports-empty {
       padding: 6px 24px 14px;
       font-size: 11px;
@@ -585,6 +631,95 @@
     .snapshot-banner.visible { display: flex; }
     .snapshot-banner .info { font-size: 13px; color: #5a4a00; font-weight: 500; }
     .snapshot-banner .info strong { color: #2d2400; }
+
+    /* === Print / PDF === */
+    /* En pantalla, el header de impresión está oculto */
+    .print-only { display: none; }
+
+    @page { size: A4 portrait; margin: 14mm 14mm 16mm; }
+
+    @media print {
+      /* Reset cromático y de chrome del browser */
+      html, body { background: #fff !important; color: #2b2b2b !important; }
+      body { font-size: 11pt; }
+
+      /* Ocultar todo lo que no es contenido del reporte */
+      .sidebar, .topbar, .snapshot-banner, .menu-toggle,
+      .topbar-actions, #refreshBtn, #saveBtn, #pdfBtn { display: none !important; }
+
+      .main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
+
+      /* Cabecera de impresión visible sólo en PDF */
+      .print-only { display: block; }
+      .print-header {
+        display: flex !important;
+        align-items: center;
+        gap: 16px;
+        padding-bottom: 10px;
+        margin-bottom: 18px;
+        border-bottom: 2px solid #1a2426;
+      }
+      .print-logo { max-height: 36px; max-width: 140px; filter: invert(1) brightness(0.2); }
+      .print-title { flex: 1; }
+      .print-eyebrow { font-size: 9pt; letter-spacing: 1.4px; text-transform: uppercase; color: #6C868C; font-weight: 600; }
+      .print-month { font-size: 15pt; font-weight: 700; color: #1a2426; margin-top: 2px; }
+
+      /* Layout / colores adaptados a papel */
+      .hero {
+        background: #f6efe2 !important;
+        padding: 18px 20px !important;
+        margin-bottom: 22px !important;
+        border: 1px solid #e0d3bd !important;
+      }
+      .hero::before { display: none !important; }
+      .hero h1 { font-size: 22pt !important; margin-bottom: 8px !important; }
+      .hero p { font-size: 10.5pt !important; }
+
+      .section { margin-bottom: 18px !important; page-break-inside: auto; break-inside: auto; }
+      .section-header { margin-bottom: 12px !important; page-break-after: avoid; break-after: avoid; }
+      .section-title { font-size: 16pt !important; }
+      .section-eyebrow { font-size: 9pt !important; }
+      .section-lead { font-size: 10pt !important; }
+
+      /* No partir cards, kpi-grids, tablas o gráficos a la mitad */
+      .card, .kpi-grid, .kpi-card, table, .chart-wrap {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      .kpi-grid { gap: 8px !important; margin-bottom: 12px !important; }
+      .kpi-card { padding: 10px 12px !important; }
+      .kpi-label { font-size: 8pt !important; }
+      .kpi-value { font-size: 16pt !important; }
+      .kpi-value.small { font-size: 12pt !important; }
+      .kpi-sub, .kpi-delta { font-size: 8.5pt !important; }
+
+      .card { padding: 14px !important; border: 1px solid #d4d4d4 !important; box-shadow: none !important; margin-bottom: 8px !important; }
+      .card-title { font-size: 10pt !important; }
+      .card-title small { font-size: 8.5pt !important; }
+
+      .chart-wrap { height: 8.5cm !important; }
+      .chart-wrap.tall { height: 9cm !important; }
+      .chart-wrap.short { height: 6.5cm !important; }
+
+      table { font-size: 8.5pt !important; }
+      th { font-size: 7.5pt !important; padding: 6px 8px !important; background: #f0e6d6 !important; }
+      td { padding: 4px 8px !important; }
+
+      .source { font-size: 8pt !important; font-style: italic !important; color: #777 !important; }
+      .source::before { content: '' !important; }   /* Sin bullet verde en el PDF */
+      .badge { display: none !important; }          /* Sin badges de "EN VIVO" en el PDF */
+      .section.is-live .card { border-color: #d4d4d4 !important; box-shadow: none !important; }
+      .section.is-live .source { color: #777 !important; font-weight: 400 !important; }
+
+      /* Mantener layout de 2 columnas si entra en el ancho de la hoja */
+      .two-col { gap: 8px !important; }
+
+      footer { font-size: 8pt !important; margin-top: 20px !important; padding-top: 10px !important; }
+
+      /* Forzar contención de colores de Chart.js / cards */
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
 
     /* === Responsive === */
     @media (max-width: 1024px) {
@@ -685,12 +820,22 @@
     <div class="topbar-actions">
       <div class="topbar-meta">Reporte · <strong id="topbarMonth">Mayo 2026</strong></div>
       <button class="btn btn-icon" id="refreshBtn" title="Re-consultar APIs en vivo" aria-label="Refrescar"><span class="icon">↻</span></button>
+      <button class="btn" id="pdfBtn" title="Descargar el reporte como PDF (Guardar como PDF en el diálogo de impresión)"><span>⬇</span><span class="label">PDF</span></button>
       <button class="btn btn-primary" id="saveBtn" title="Guardar snapshot del estado actual"><span>+</span><span class="label">Guardar reporte</span></button>
     </div>
   </header>
 
   <!-- ============ MAIN ============ -->
   <main class="main">
+
+    <!-- Cabecera que sólo aparece al imprimir/exportar PDF -->
+    <div class="print-only print-header">
+      <img src="logo.png" alt="Simpleza SA" class="print-logo" onerror="this.style.display='none'" />
+      <div class="print-title">
+        <div class="print-eyebrow">Coyuntura Económica Argentina · Simpleza SA</div>
+        <div class="print-month" id="printMonth">Mayo 2026</div>
+      </div>
+    </div>
 
     <!-- SNAPSHOT BANNER -->
     <div class="snapshot-banner" id="snapshotBanner" role="status">
@@ -1302,6 +1447,8 @@
   Chart.defaults.plugins.legend.labels.boxWidth = 10;
   Chart.defaults.plugins.legend.labels.boxHeight = 10;
   Chart.defaults.plugins.legend.labels.padding = 14;
+  // DPI mayor para que los charts no salgan pixelados al exportar a PDF
+  Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
 
   function commonScaleOpts() {
     return {
@@ -2035,7 +2182,7 @@
   }
   function setCurrentMonthLabel() {
     const lbl = getCurrentMonthLabel();
-    ['topbarMonth', 'brandMonth', 'footerMonth'].forEach(id => {
+    ['topbarMonth', 'brandMonth', 'footerMonth', 'printMonth'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = lbl;
     });
@@ -2137,10 +2284,17 @@
       emptyEl.style.display = 'none';
       reports.forEach(rep => {
         const li = document.createElement('li');
+        li.dataset.id = String(rep.id);
         if (rep.id === viewingSnapshotId) li.classList.add('active');
+        // El × queda escondido hasta hover (CSS) y al apretarlo no borra: muestra confirm inline.
         li.innerHTML = `
           <a data-id="${rep.id}" title="${escapeHtml(rep.title)}">${escapeHtml(rep.title)}</a>
-          <button class="del" data-id="${rep.id}" aria-label="Eliminar reporte">×</button>
+          <button class="del" data-id="${rep.id}" aria-label="Eliminar reporte" title="Eliminar (requiere confirmación)">×</button>
+          <div class="confirm" role="alertdialog" aria-label="Confirmar eliminación">
+            <span class="confirm-text" title="${escapeHtml(rep.title)}">¿Eliminar ${escapeHtml(rep.title.split('·')[1] ? rep.title.split('·')[1].trim() : rep.title)}?</span>
+            <button class="confirm-no" type="button">No</button>
+            <button class="confirm-yes" type="button">Sí, eliminar</button>
+          </div>
         `;
         listEl.appendChild(li);
       });
@@ -2150,9 +2304,22 @@
       listEl.querySelectorAll('button.del[data-id]').forEach(b => {
         b.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (confirm('¿Eliminar este reporte guardado?')) {
-            deleteReport(Number(b.dataset.id));
-          }
+          // Salir del modo confirm en cualquier otra fila
+          listEl.querySelectorAll('li.confirming').forEach(other => other.classList.remove('confirming'));
+          b.closest('li').classList.add('confirming');
+        });
+      });
+      listEl.querySelectorAll('.confirm-no').forEach(b => {
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          b.closest('li').classList.remove('confirming');
+        });
+      });
+      listEl.querySelectorAll('.confirm-yes').forEach(b => {
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = Number(b.closest('li').dataset.id);
+          deleteReport(id);
         });
       });
     } catch (e) {
@@ -2297,6 +2464,19 @@
     });
   }
 
+  function wirePdfButton() {
+    const btn = document.getElementById('pdfBtn');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      // Si hay alguna fila en modo "confirmar eliminación", cancelarla antes de imprimir
+      document.querySelectorAll('.reports-list li.confirming').forEach(li => li.classList.remove('confirming'));
+      // Forzar a Chart.js a recalcular tamaños antes de que el browser haga su snapshot para impresión.
+      // El timeout chico le da tiempo al evento resize a propagarse antes del print modal.
+      window.dispatchEvent(new Event('resize'));
+      setTimeout(() => window.print(), 80);
+    });
+  }
+
   async function fetchAllLive() {
     await Promise.all([liveIpc(), liveEmae(), liveSalario()]);
   }
@@ -2323,6 +2503,7 @@
     initNav();
     setCurrentMonthLabel();
     wireRefreshButton();
+    wirePdfButton();
     wireReportsUI();
 
     // Fetch live data in parallel
