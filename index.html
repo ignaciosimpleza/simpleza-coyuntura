@@ -502,6 +502,37 @@
       color: rgba(255,255,255,0.4);
       font-style: italic;
     }
+    .reports-error {
+      margin: 4px 14px 14px;
+      padding: 10px 12px;
+      background: rgba(205, 97, 85, 0.14);
+      border: 1px solid rgba(205, 97, 85, 0.3);
+      border-radius: 8px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.4;
+    }
+    .reports-error .title {
+      font-weight: 700;
+      color: var(--terracota);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-size: 10px;
+      margin-bottom: 4px;
+      display: block;
+    }
+    .reports-error .detail {
+      word-break: break-word;
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 10.5px;
+      color: rgba(255,255,255,0.7);
+      margin-top: 4px;
+    }
+    .reports-error .hint {
+      margin-top: 6px;
+      color: rgba(255,255,255,0.55);
+      font-size: 10.5px;
+    }
 
     /* === Topbar buttons === */
     .topbar-actions { display: flex; align-items: center; gap: 10px; }
@@ -630,10 +661,11 @@
       <li><a href="#salario" data-title="Salario Real"><span class="dot"></span> Salario real</a></li>
     </ul>
 
-    <div id="reportsSection" style="display:none;">
+    <div id="reportsSection">
       <div class="nav-section-title">Reportes guardados</div>
       <ul class="reports-list" id="reportsList"></ul>
-      <div class="reports-empty" id="reportsEmpty">Todavía no hay reportes guardados.</div>
+      <div class="reports-empty" id="reportsEmpty" style="display:none;">Todavía no hay reportes guardados.</div>
+      <div class="reports-error" id="reportsError" style="display:none;"></div>
     </div>
 
     <div class="sidebar-footer">
@@ -2016,21 +2048,87 @@
     let body = null;
     try { body = bodyText ? JSON.parse(bodyText) : null; } catch { body = bodyText; }
     if (!r.ok) {
-      const detail = typeof body === 'object' && body
-        ? (body.error || JSON.stringify(body))
-        : bodyText;
+      let detail;
+      if (typeof body === 'object' && body) {
+        const parts = [];
+        if (body.error) parts.push(body.error);
+        if (body.hasUrl === false) parts.push('(TURSO_DATABASE_URL ausente)');
+        if (body.hasToken === false) parts.push('(TURSO_AUTH_TOKEN ausente)');
+        if (body.code) parts.push(`[${body.code}]`);
+        detail = parts.length ? parts.join(' ') : JSON.stringify(body);
+      } else {
+        // Si el body no es JSON (típicamente cuando Vercel intercepta con HTML), incluir un preview
+        detail = bodyText && bodyText.length > 200 ? bodyText.slice(0, 200) + '…' : (bodyText || 'sin cuerpo de respuesta');
+      }
       throw new Error(`HTTP ${r.status}: ${detail}`);
     }
     return body;
   }
 
+  // Estado del backend de reportes — se actualiza en cada listReports y permite
+  // que saveCurrentReport informe al usuario sin volver a pegarle a la API.
+  let reportsApiOk = false;
+  let reportsApiError = null;
+
+  function hintForError(msg) {
+    const m = (msg || '').toLowerCase();
+    if (m.includes('turso_database_url') && m.includes('no está configurada')) {
+      return 'Faltó cargar la variable TURSO_DATABASE_URL en Vercel → Settings → Environment Variables.';
+    }
+    if (m.includes('turso_auth_token') && m.includes('no está configurada')) {
+      return 'Faltó cargar TURSO_AUTH_TOKEN en Vercel → Settings → Environment Variables.';
+    }
+    if (m.includes('inválida') || m.includes('libsql://')) {
+      return 'La URL de Turso no tiene el formato esperado (debe empezar con libsql:// o https://).';
+    }
+    if (m.includes('unauthorized') || m.includes('401') || m.includes('token')) {
+      return 'El token de Turso no es válido o expiró. Regenerá uno en Turso → Connect → Create Token.';
+    }
+    if (m.includes('not found') || m.includes('database') || m.includes('not exist')) {
+      return 'La base de Turso no existe o el nombre no coincide. Verificá el URL.';
+    }
+    if (m.includes('failed to fetch') || m.includes('networkerror')) {
+      return 'No se pudo llegar al backend. Probablemente Vercel todavía está desplegando o caído.';
+    }
+    if (m.includes('404')) {
+      return 'El endpoint /api/reports no existe en este deploy — Vercel no detectó la función. Verificá que el archivo api/reports.js esté en el repo.';
+    }
+    if (m.includes('500')) {
+      return 'Error del backend. Revisá Vercel → Logs de la función api/reports.';
+    }
+    return 'Revisá los logs de la función api/reports en Vercel.';
+  }
+
+  function renderReportsError(msg) {
+    const errEl = document.getElementById('reportsError');
+    const listEl = document.getElementById('reportsList');
+    const emptyEl = document.getElementById('reportsEmpty');
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'none';
+    errEl.style.display = '';
+    errEl.innerHTML = `
+      <span class="title">⚠ Reportes no disponibles</span>
+      <div>El backend de persistencia no respondió.</div>
+      <div class="detail">${escapeHtml(msg)}</div>
+      <div class="hint">${escapeHtml(hintForError(msg))}</div>
+    `;
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   async function listReports() {
     const listEl = document.getElementById('reportsList');
     const emptyEl = document.getElementById('reportsEmpty');
-    const secEl = document.getElementById('reportsSection');
+    const errEl = document.getElementById('reportsError');
     try {
       const { reports } = await apiCall('/api/reports');
-      secEl.style.display = '';
+      reportsApiOk = true;
+      reportsApiError = null;
+      errEl.style.display = 'none';
       listEl.innerHTML = '';
       if (!reports || reports.length === 0) {
         emptyEl.style.display = '';
@@ -2041,7 +2139,7 @@
         const li = document.createElement('li');
         if (rep.id === viewingSnapshotId) li.classList.add('active');
         li.innerHTML = `
-          <a data-id="${rep.id}" title="${rep.title}">${rep.title}</a>
+          <a data-id="${rep.id}" title="${escapeHtml(rep.title)}">${escapeHtml(rep.title)}</a>
           <button class="del" data-id="${rep.id}" aria-label="Eliminar reporte">×</button>
         `;
         listEl.appendChild(li);
@@ -2058,17 +2156,22 @@
         });
       });
     } catch (e) {
-      // API no disponible (Turso no configurado o sin red): ocultar UI de reportes
+      reportsApiOk = false;
+      reportsApiError = e.message;
       console.warn('Reportes no disponibles:', e.message);
-      secEl.style.display = 'none';
-      const saveBtn = document.getElementById('saveBtn');
-      if (saveBtn) saveBtn.style.display = 'none';
+      renderReportsError(e.message);
     }
   }
 
   async function saveCurrentReport() {
     const btn = document.getElementById('saveBtn');
     if (!btn) return;
+    if (!reportsApiOk) {
+      alert('No se puede guardar: el backend de reportes no responde.\n\n' +
+            (reportsApiError || 'Error desconocido') + '\n\n' +
+            hintForError(reportsApiError || ''));
+      return;
+    }
     if (!currentSnapshot.ipc && !currentSnapshot.emae && !currentSnapshot.salario) {
       alert('Esperá a que carguen los datos en vivo antes de guardar.');
       return;
