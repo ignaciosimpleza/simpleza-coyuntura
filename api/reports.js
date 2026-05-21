@@ -1,7 +1,8 @@
 import { createClient } from '@libsql/client';
 
-const url = process.env.TURSO_DATABASE_URL;
-const authToken = process.env.TURSO_AUTH_TOKEN;
+// Trim para tolerar copy/paste con whitespace o newlines al final del valor
+const url = (process.env.TURSO_DATABASE_URL || '').trim();
+const authToken = (process.env.TURSO_AUTH_TOKEN || '').trim();
 
 let db = null;
 function getDB() {
