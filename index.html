@@ -1281,7 +1281,7 @@
       <div class="section-header">
         <div class="section-header-text">
           <div class="section-eyebrow">Confianza institucional</div>
-          <h2 class="section-title">Confianza en el Gobierno <span class="badge badge-static">Mensual · UTDT</span></h2>
+          <h2 class="section-title">Confianza en el Gobierno <span class="badge badge-loading" id="badge-icg">Cargando…</span></h2>
           <p class="section-lead">En lo que va de 2026, el Índice acumula cuatro caídas consecutivas, siendo la de abril la más pronunciada (−12% vs marzo). CABA y GBA por debajo de los niveles del Interior del país.</p>
         </div>
       </div>
@@ -1333,7 +1333,7 @@
       <div class="section-header">
         <div class="section-header-text">
           <div class="section-eyebrow">Confianza del consumidor</div>
-          <h2 class="section-title">Índice de Confianza del Consumidor <span class="badge badge-static">Mensual · UTDT</span></h2>
+          <h2 class="section-title">Índice de Confianza del Consumidor <span class="badge badge-loading" id="badge-icc">Cargando…</span></h2>
           <p class="section-lead">Los niveles de confianza del consumidor presentan una tendencia similar a los del Gobierno. En abril de este año el ICC disminuyó 10% vs abril de 2025, registrando caídas en todas las áreas.</p>
         </div>
       </div>
@@ -2217,16 +2217,18 @@
   }
 
   // --- ICG serie histórica ---
-  function renderIcgSerie() {
+  let icgSerieChart = null;
+  function renderIcgSerie(labels, values) {
+    if (!labels) { const d = FALLBACK.icgSerie; labels = d.labels; values = d.values; }
     const ctx = document.getElementById('chart-icg-serie');
-    const d = FALLBACK.icgSerie;
-    new Chart(ctx, {
+    if (icgSerieChart) icgSerieChart.destroy();
+    icgSerieChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: d.labels,
+        labels,
         datasets: [{
           label: 'ICG general',
-          data: d.values,
+          data: values,
           borderColor: C.verde,
           backgroundColor: 'rgba(50, 232, 169, 0.10)',
           borderWidth: 2,
@@ -2272,17 +2274,19 @@
   }
 
   // --- ICC por zona ---
-  function renderIccZona() {
+  let iccZonaChart = null;
+  function renderIccZona(labels, capital, interior, gba) {
+    if (!labels) { const d = FALLBACK.iccZona; labels = d.labels; capital = d.capital; interior = d.interior; gba = d.gba; }
     const ctx = document.getElementById('chart-icc-zona');
-    const d = FALLBACK.iccZona;
-    new Chart(ctx, {
+    if (iccZonaChart) iccZonaChart.destroy();
+    iccZonaChart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: d.labels,
+        labels,
         datasets: [
-          { label: 'Capital',  data: d.capital,  borderColor: C.beige,     backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 2 },
-          { label: 'Interior', data: d.interior, borderColor: C.verde,     backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 2 },
-          { label: 'GBA',      data: d.gba,      borderColor: C.terracota, backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 2 }
+          { label: 'Capital',  data: capital,  borderColor: C.beige,     backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 2 },
+          { label: 'Interior', data: interior, borderColor: C.verde,     backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 2 },
+          { label: 'GBA',      data: gba,      borderColor: C.terracota, backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 2 }
         ]
       },
       options: {
@@ -3107,6 +3111,80 @@
     }
   }
 
+  // ICG / ICC de UTDT: el endpoint devuelve sheets[]. La heurística "series" intenta detectar
+  // automáticamente una columna de fecha + una de valor índice (rango 0-5). Acá tomamos esa
+  // serie ya detectada, y si no, recorremos las sheets buscando algún `rows[]` con fechas.
+  function pickUtdtSeries(payload) {
+    if (!payload || !Array.isArray(payload.sheets)) return null;
+    for (const sheet of payload.sheets) {
+      if (Array.isArray(sheet.series) && sheet.series.length > 0) return sheet.series;
+    }
+    return null;
+  }
+
+  function applyIcgSerieData(d) {
+    if (!d) return;
+    renderIcgSerie(d.labels, d.values);
+  }
+  async function liveIcg() {
+    const badge = document.getElementById('badge-icg');
+    try {
+      const r = await fetch('/api/utdt?indicator=icg');
+      if (!r.ok) throw new Error(`UTDT ICG HTTP ${r.status}`);
+      const payload = await r.json();
+      const series = pickUtdtSeries(payload);
+      if (!series || series.length < 6) throw new Error('UTDT ICG: serie no detectada o muy corta');
+      const last60 = series.slice(-60);
+      const lastDate = last60[last60.length - 1].fecha;
+      assertFresh(lastDate, 'ICG');
+      const labels = last60.map(r => formatMonth(r.fecha));
+      const values = last60.map(r => r.valor);
+      const snapshot = { labels, values, fechaLabel: formatMonth(lastDate), source: payload.sourceUrl };
+      currentSnapshot.icgSerie = snapshot;
+      applyIcgSerieData(snapshot);
+      cacheLastKnown('icgSerie', snapshot);
+      setBadgeLive(badge, lastDate);
+    } catch (e) {
+      console.warn('ICG UTDT falló', e);
+      if (!restoreFromCache('icgSerie', 'badge-icg', applyIcgSerieData)) {
+        setBadgeFromError(badge, e);
+      }
+    }
+  }
+
+  function applyIccZonaData(d) {
+    if (!d) return;
+    // El payload de UTDT para ICC trae una serie general; si está disponible la usamos como
+    // "todas las zonas" (fallback simple). El desagregado por CABA/GBA/Interior requiere
+    // una segunda iteración cuando confirmemos el shape exacto del XLS.
+    renderIccZona(d.labels, d.capital || d.values, d.interior || d.values, d.gba || d.values);
+  }
+  async function liveIcc() {
+    const badge = document.getElementById('badge-icc');
+    try {
+      const r = await fetch('/api/utdt?indicator=icc');
+      if (!r.ok) throw new Error(`UTDT ICC HTTP ${r.status}`);
+      const payload = await r.json();
+      const series = pickUtdtSeries(payload);
+      if (!series || series.length < 6) throw new Error('UTDT ICC: serie no detectada o muy corta');
+      const last16 = series.slice(-16);
+      const lastDate = last16[last16.length - 1].fecha;
+      assertFresh(lastDate, 'ICC');
+      const labels = last16.map(r => formatMonth(r.fecha));
+      const values = last16.map(r => r.valor);
+      const snapshot = { labels, values, fechaLabel: formatMonth(lastDate), source: payload.sourceUrl };
+      currentSnapshot.iccZona = snapshot;
+      applyIccZonaData(snapshot);
+      cacheLastKnown('iccZona', snapshot);
+      setBadgeLive(badge, lastDate);
+    } catch (e) {
+      console.warn('ICC UTDT falló', e);
+      if (!restoreFromCache('iccZona', 'badge-icc', applyIccZonaData)) {
+        setBadgeFromError(badge, e);
+      }
+    }
+  }
+
   // Coordinador: corre las 4 series del bloque "Reservas y Tasas" y maneja un único badge.
   async function liveBcraBloque() {
     const badge = document.getElementById('badge-bcra');
@@ -3616,7 +3694,9 @@
       liveTcMayorista(),
       liveBandas(),
       liveBcraBloque(),
-      liveCotizaciones()
+      liveCotizaciones(),
+      liveIcg(),
+      liveIcc()
     ]);
   }
 
