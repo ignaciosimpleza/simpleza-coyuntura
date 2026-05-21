@@ -639,8 +639,8 @@
     /* Páginas de contenido: header con eyebrow del reporte, footer con web + nº de página.
        Se inyecta el mes vigente vía JS antes de imprimir (CSS @page no admite variables). */
     @page {
-      size: A4 portrait;
-      margin: 22mm 16mm 20mm;
+      size: A4 landscape;
+      margin: 16mm 18mm 14mm;
       @top-left {
         content: "Coyuntura Económica Argentina";
         font-family: 'Sora', sans-serif;
@@ -699,14 +699,15 @@
       .main { margin: 0 !important; padding: 0 !important; max-width: 100% !important; }
 
       /* === PORTADA (página 1) ===
-         Diseño sobrio: fondo blanco, tipografía clara, sin gradientes ni círculos.
-         Más legible y más confiable cross-browser/cross-printer que el diseño con efectos. */
+         Landscape: el título se ubica a la izquierda y el resto queda como aire
+         intencional. Logo arriba, footer abajo. Sin gradientes para máxima
+         compatibilidad cross-printer. */
       .print-only { display: block; }
       .print-cover {
         page-break-after: always;
         break-after: page;
         width: 100%;
-        min-height: 245mm;
+        min-height: 178mm;
         box-sizing: border-box;
         background: #fff !important;
         display: flex !important;
@@ -714,13 +715,13 @@
         position: relative;
       }
       .print-cover::after { display: none !important; }
-      .print-cover-top { display: flex; align-items: center; padding-bottom: 30mm; }
+      .print-cover-top { display: flex; align-items: center; padding-bottom: 18mm; }
       .print-cover-logo {
-        max-height: 56px;
+        max-height: 52px;
         max-width: 200px;
         filter: invert(1) brightness(0.16);
       }
-      .print-cover-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+      .print-cover-body { flex: 1; display: flex; flex-direction: column; justify-content: center; max-width: 175mm; }
       .print-cover-rule { width: 64px; height: 3px; background: var(--verde-menta); margin-bottom: 14px; }
       .print-cover-eyebrow {
         font-size: 10pt;
@@ -728,52 +729,77 @@
         text-transform: uppercase;
         color: #6C868C;
         font-weight: 700;
-        margin-bottom: 22px;
+        margin-bottom: 20px;
       }
       .print-cover-title {
-        font-size: 44pt;
+        font-size: 42pt;
         font-weight: 800;
         line-height: 1.02;
         letter-spacing: -1.4px;
         color: #1a2426;
-        margin: 0 0 20px;
+        margin: 0 0 16px;
       }
       .print-cover-subtitle {
-        font-size: 13pt;
+        font-size: 12.5pt;
         font-weight: 400;
         color: #6C868C;
         line-height: 1.4;
-        max-width: 80%;
-        margin: 0 0 24mm;
+        max-width: 95%;
+        margin: 0;
       }
       .print-cover-accent {
-        width: 90mm; height: 2px; background: #d4d4d4;
-        margin-top: 0;
+        display: none;
       }
       .print-cover-footer {
         display: flex; justify-content: space-between; align-items: flex-end;
         font-size: 9pt; color: #4d4d4d; line-height: 1.5;
-        border-top: 1px solid #d4d4d4; padding-top: 12px;
-        margin-top: 8mm;
+        border-top: 1px solid #d4d4d4; padding-top: 10px;
+        margin-top: 6mm;
       }
       .print-cover-footer strong { color: #1a2426; font-weight: 700; }
       .print-cover-url { font-weight: 700; color: var(--gris-oscuro); letter-spacing: 0.3px; }
 
       /* === Wrapper de contenido — empieza la primera página de contenido con un poco
             más de aire arriba, ya que el header @page ya provee separación. === */
+      /* Página de resumen ejecutivo (página 2): hero a la izquierda, KPIs a la derecha.
+         Grid layout para que la hoja se llene completamente. Tras este bloque, page break. */
+      .summary-page {
+        display: grid !important;
+        grid-template-columns: 5fr 6fr !important;
+        gap: 14px !important;
+        min-height: 175mm !important;
+        page-break-after: always !important;
+        break-after: page !important;
+      }
       .hero {
         background: #f6efe2 !important;
-        padding: 18px 22px !important;
-        margin-bottom: 22px !important;
+        padding: 22px 26px !important;
+        margin: 0 !important;
         border: 1px solid #e0d3bd !important;
-        border-left: 4px solid var(--verde-menta) !important;
+        border-left: 5px solid var(--verde-menta) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
         page-break-after: avoid;
         break-after: avoid-page;
       }
       .hero::before { display: none !important; }
-      .hero h1 { font-size: 20pt !important; margin-bottom: 8px !important; line-height: 1.15 !important; }
-      .hero .eyebrow { font-size: 8.5pt !important; }
-      .hero p { font-size: 10pt !important; }
+      .hero h1 { font-size: 24pt !important; margin-bottom: 14px !important; line-height: 1.1 !important; letter-spacing: -0.5px !important; }
+      .hero .eyebrow { font-size: 10pt !important; letter-spacing: 1.8px !important; margin-bottom: 14px !important; }
+      .hero p { font-size: 11.5pt !important; line-height: 1.5 !important; max-width: none !important; }
+
+      .kpi-grid-resumen {
+        margin: 0 !important;
+        padding: 0 !important;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+        align-content: center !important;
+      }
+      .kpi-grid-resumen .kpi-card { padding: 14px 16px !important; }
+      .kpi-grid-resumen .kpi-label { font-size: 8.5pt !important; margin-bottom: 6px !important; }
+      .kpi-grid-resumen .kpi-value { font-size: 20pt !important; }
+      .kpi-grid-resumen .kpi-sub, .kpi-grid-resumen .kpi-delta { font-size: 9pt !important; }
 
       /* Numeración estilo consultora: 01 · 02 · 03 ...
          Aplicado sólo a .section (no .print-cover ni .print-back). El hero (#resumen)
@@ -804,10 +830,10 @@
       /* Las primeras dos secciones (resumen kpi-grid + sección 01) podrían quedar
          juntas pero preferimos uniformidad: cada sección arranca página. */
 
-      .section-header { margin-bottom: 14px !important; }
-      .section-title { font-size: 17pt !important; margin-bottom: 6px !important; letter-spacing: -0.3px !important; }
-      .section-eyebrow { font-size: 9pt !important; margin-bottom: 4px !important; }
-      .section-lead { font-size: 10.5pt !important; margin-bottom: 0 !important; line-height: 1.45 !important; }
+      .section-header { margin-bottom: 10px !important; }
+      .section-title { font-size: 16pt !important; margin-bottom: 4px !important; letter-spacing: -0.3px !important; }
+      .section-eyebrow { font-size: 9pt !important; margin-bottom: 3px !important; }
+      .section-lead { font-size: 10pt !important; margin-bottom: 0 !important; line-height: 1.4 !important; }
 
       /* Bloquear roturas dentro de elementos atómicos (charts, tablas, KPI grid, KPI cards)
          pero NO en las cards: dejarlas romper si hace falta, así el motor de impresión
@@ -821,36 +847,39 @@
         break-inside: auto !important;
       }
 
-      .kpi-grid {
+      /* Landscape A4 tiene ~260mm de ancho útil → entran 4 KPIs cómodos en una sola fila */
+      .section .kpi-grid {
         gap: 8px !important;
-        margin-bottom: 14px !important;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important;
-      }
-      .kpi-card { padding: 12px 14px !important; }
-      .kpi-card.accent { border-left-width: 3px !important; }
-      .kpi-label { font-size: 8pt !important; letter-spacing: 1px !important; margin-bottom: 6px !important; }
-      .kpi-value { font-size: 18pt !important; line-height: 1.05 !important; }
-      .kpi-value.small { font-size: 12pt !important; }
-      .kpi-sub, .kpi-delta { font-size: 9pt !important; margin-top: 5px !important; }
-
-      .card { padding: 14px 16px !important; border: 1px solid #e0e0e0 !important; box-shadow: none !important; margin-bottom: 10px !important; }
-      .card-header {
         margin-bottom: 10px !important;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+      }
+      .kpi-card { padding: 9px 12px !important; }
+      .kpi-card.accent { border-left-width: 3px !important; }
+      .kpi-label { font-size: 7.5pt !important; letter-spacing: 0.9px !important; margin-bottom: 4px !important; }
+      .kpi-value { font-size: 16pt !important; line-height: 1.05 !important; }
+      .kpi-value.small { font-size: 11pt !important; }
+      .kpi-sub, .kpi-delta { font-size: 8pt !important; margin-top: 3px !important; }
+
+      .card { padding: 10px 14px !important; border: 1px solid #e0e0e0 !important; box-shadow: none !important; margin-bottom: 8px !important; }
+      .card-header {
+        margin-bottom: 6px !important;
         page-break-after: avoid !important;
         break-after: avoid !important;
       }
-      .card-title { font-size: 10.5pt !important; font-weight: 700 !important; }
-      .card-title small { font-size: 9pt !important; font-weight: 400 !important; }
+      .card-title { font-size: 10pt !important; font-weight: 700 !important; }
+      .card-title small { font-size: 8.5pt !important; font-weight: 400 !important; }
 
-      /* Charts apilados verticalmente. Cada sección entra en una página (~250mm) con:
-         header (30mm) + KPIs (35mm) + 1 ó 2 charts (~150-180mm restantes). */
+      /* Charts en landscape: ancho de página completo, alto reducido.
+         A4 landscape: ~178mm de alto útil; header (25mm) + KPIs (35mm) deja ~118mm.
+         La tabla del IPC compite con un chart en two-col, por eso afinamos ambos. */
       .chart-wrap { height: 7cm !important; }
       .chart-wrap.tall { height: 8.5cm !important; }
       .chart-wrap.short { height: 5.5cm !important; }
 
-      table { font-size: 8pt !important; }
-      th { font-size: 7pt !important; padding: 4px 7px !important; background: #f0e6d6 !important; letter-spacing: 0.3px !important; }
-      td { padding: 2.5px 7px !important; }
+      table { font-size: 7pt !important; }
+      th { font-size: 6.5pt !important; padding: 3px 6px !important; background: #f0e6d6 !important; letter-spacing: 0.3px !important; }
+      td { padding: 1.5px 6px !important; }
+      tr.subheader td { padding-top: 4px !important; padding-bottom: 2px !important; }
 
       .source { font-size: 8pt !important; font-style: italic !important; color: #888 !important; margin-top: 6px !important; }
       .source::before { content: '' !important; }
@@ -882,7 +911,7 @@
         break-before: page;
         page: back-page;
         width: 100%;
-        min-height: 245mm;
+        min-height: 178mm;
         box-sizing: border-box;
         position: relative;
         background: #fff;
@@ -1091,7 +1120,8 @@
       <button class="btn" id="exitSnapshotBtn">Volver al mes vigente</button>
     </div>
 
-    <!-- HERO -->
+    <!-- HERO + RESUMEN — en pantalla fluyen vertical, en print se agrupan en la página 2 -->
+    <div class="summary-page">
     <section class="hero" id="resumen">
       <div class="eyebrow">Contexto local</div>
       <h1>La heterogeneidad y la adoptabilidad del modelo</h1>
@@ -1099,7 +1129,7 @@
     </section>
 
     <!-- RESUMEN KPIs -->
-    <div class="kpi-grid" style="margin-bottom: 64px;">
+    <div class="kpi-grid kpi-grid-resumen" style="margin-bottom: 64px;">
       <div class="kpi-card accent">
         <div class="kpi-label">IPC mensual · <span id="kpi-ipc-mensual-fecha">mar-26</span></div>
         <div class="kpi-value" id="kpi-ipc-mensual">3,4%</div>
@@ -1131,6 +1161,8 @@
         <div class="kpi-sub">Puesto 106 · Heritage</div>
       </div>
     </div>
+    </div>
+    <!-- /summary-page -->
 
 
     <!-- ============ LIBERTAD ECONÓMICA ============ -->
